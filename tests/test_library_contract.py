@@ -96,3 +96,13 @@ def test_manifest_pins_installed_library() -> None:
 def test_translations_match_strings() -> None:
     strings = (COMPONENT / "strings.json").read_text()
     assert (COMPONENT / "translations" / "en.json").read_text() == strings
+
+
+@pytest.mark.parametrize(("name", "size"), [("icon.png", 256), ("icon@2x.png", 512)])
+def test_brand_icon(name: str, size: int) -> None:
+    """Home Assistant 2026.3+ shows brand/icon.png for custom integrations."""
+    data = (COMPONENT / "brand" / name).read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    width = int.from_bytes(data[16:20], "big")
+    height = int.from_bytes(data[20:24], "big")
+    assert (width, height) == (size, size)

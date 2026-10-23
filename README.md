@@ -44,6 +44,9 @@ use the manual install below, or make the repo public first.
 Copy `custom_components/moolink` into your Home Assistant
 `config/custom_components/` folder and restart.
 
+The integration ships its own icon (`brand/icon.png`), which Home Assistant
+2026.3 and newer show automatically.
+
 ## Setup
 
 **Settings → Devices & services → Add integration → Moolink**, then enter:
