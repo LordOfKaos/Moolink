@@ -138,3 +138,82 @@ async def test_unsupported_temperature_rejected(
             blocking=True,
         )
     assert "climate_temperature" not in eu_entry.options
+
+
+@pytest.fixture
+def capped_entry(eu_entry: MockConfigEntry) -> MockConfigEntry:
+    """A car whose climate tops out at 25 °C (e.g. a Kona)."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=eu_entry.unique_id,
+        data=dict(eu_entry.data),
+        options={**NO_QUIET_HOURS, "climate_max_temperature": 25},
+    )
+
+
+async def test_car_maximum_caps_climate_control(
+    hass: HomeAssistant, mock_vm: MagicMock, capped_entry
+) -> None:
+    await _setup(hass, capped_entry)
+    state = hass.states.get(CLIMATE)
+    assert state.attributes["max_temp"] == 25.0
+    assert state.attributes["min_temp"] == 14.0
+
+
+async def test_car_maximum_rejects_higher_target(
+    hass: HomeAssistant, mock_vm: MagicMock, capped_entry
+) -> None:
+    await _setup(hass, capped_entry)
+    # Home Assistant's climate control enforces max_temp itself.
+    with pytest.raises(ServiceValidationError, match="14.0 to 25"):
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {"entity_id": CLIMATE, "temperature": 26},
+            blocking=True,
+        )
+    device_id = next(iter(hass.data["device_registry"].devices))
+    with pytest.raises(ServiceValidationError, match="maximum of 25"):
+        await hass.services.async_call(
+            DOMAIN,
+            "start_climate",
+            {"device_id": device_id, "temperature": 27},
+            blocking=True,
+        )
+    mock_vm.start_climate.assert_not_called()
+
+    await hass.services.async_call(
+        "climate",
+        "set_temperature",
+        {"entity_id": CLIMATE, "temperature": 25},
+        blocking=True,
+    )
+    assert capped_entry.options["climate_temperature"] == 25
+
+
+async def test_options_reject_target_above_new_maximum(
+    hass: HomeAssistant, mock_vm: MagicMock, eu_entry
+) -> None:
+    await _setup(hass, eu_entry)
+    result = await hass.config_entries.options.async_init(eu_entry.entry_id)
+    user_input = {
+        "scan_interval": 30,
+        "force_refresh_interval": 240,
+        "quiet_start": "22:00:00",
+        "quiet_end": "07:00:00",
+        "climate_temperature": 27,
+        "climate_max_temperature": 25,
+        "climate_duration": 10,
+        "climate_defrost": False,
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input
+    )
+    assert result["errors"] == {"climate_temperature": "above_max"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**user_input, "climate_temperature": 21}
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert eu_entry.runtime_data.climate_max == 25
+    assert hass.states.get(CLIMATE).attributes["max_temp"] == 25.0

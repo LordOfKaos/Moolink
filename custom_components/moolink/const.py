@@ -29,6 +29,8 @@ CONF_FORCE_REFRESH_INTERVAL = "force_refresh_interval"
 CONF_CLIMATE_TEMPERATURE = "climate_temperature"
 CONF_CLIMATE_DURATION = "climate_duration"
 CONF_CLIMATE_DEFROST = "climate_defrost"
+# Highest temperature the car itself accepts, if lower than the region's.
+CONF_CLIMATE_MAX_TEMPERATURE = "climate_max_temperature"
 CONF_QUIET_START = "quiet_start"
 CONF_QUIET_END = "quiet_end"
 

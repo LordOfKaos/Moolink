@@ -121,6 +121,7 @@ Open **Configure** on the integration to change these:
 | Force refresh interval | 240 min | Once cached data is older than this, the car is woken for fresh data. Each wake-up drains a little 12V battery. `0` disables it. |
 | Quiet hours start / end | 22:00 / 07:00 | No automatic polling in this window, so the car is never woken overnight. Commands still work. Set both to the same time to turn it off. |
 | Climate temperature / duration / defrost | region default / 10 min / off | Used by the Climate control, which also changes the temperature. |
+| Car's maximum temperature | empty | The highest temperature your car's climate accepts, if lower than the region allows (some Konas stop at 25 °C). Caps the Climate control and the `start_climate` action. |
 
 ## When a command fails
 

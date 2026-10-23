@@ -73,6 +73,11 @@ class MoolinkClimate(MoolinkEntity, ClimateEntity):
             self._attr_target_temperature_step = float(allowed[1] - allowed[0])
         else:
             self._attr_target_temperature_step = 0.5
+        if coordinator.climate_max is not None:
+            self._attr_max_temp = min(
+                getattr(self, "_attr_max_temp", coordinator.climate_max),
+                coordinator.climate_max,
+            )
 
     @property
     def hvac_mode(self) -> HVACMode | None:

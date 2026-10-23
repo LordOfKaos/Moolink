@@ -70,19 +70,22 @@
           "climate_duration": "Climate duration",
           "climate_defrost": "Defrost when starting climate",
           "quiet_start": "Quiet hours start",
-          "quiet_end": "Quiet hours end"
+          "quiet_end": "Quiet hours end",
+          "climate_max_temperature": "Car's maximum temperature"
         },
         "data_description": {
           "scan_interval": "How often to read the state cached in the Bluelink cloud. This does not wake the car.",
           "force_refresh_interval": "How old cached data may get before the car is woken up for fresh data. Each wake-up uses some 12V battery. 0 disables it.",
           "climate_temperature": "Target temperature for the Climate control, also set from its card. Use °F in the USA and °C elsewhere, including the UK.",
           "quiet_start": "No automatic polling from this time, so the car is never woken overnight. Commands still work. Set start and end to the same time to turn quiet hours off.",
-          "quiet_end": "Automatic polling resumes at this time."
+          "quiet_end": "Automatic polling resumes at this time.",
+          "climate_max_temperature": "The highest temperature your car's climate accepts, if it's lower than your region allows (for example 25 °C). Leave empty to allow the region's full range."
         }
       }
     },
     "error": {
-      "invalid_temperature": "Your region's API doesn't accept that temperature. Europe: 14-31.5 °C in 0.5 steps. USA: 62-81 °F."
+      "invalid_temperature": "Your region's API doesn't accept that temperature. Europe: 14-31.5 °C in 0.5 steps. USA: 62-81 °F.",
+      "above_max": "The climate temperature is above the car's maximum."
     }
   },
   "entity": {

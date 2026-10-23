@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/lordofkaos/moolink/issues",
   "loggers": ["hyundai_kia_connect_api"],
   "requirements": ["hyundai_kia_connect_api==4.39.0"],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }

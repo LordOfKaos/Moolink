@@ -40,6 +40,7 @@ from .const import (
     CONF_BRAND,
     CONF_CLIMATE_DEFROST,
     CONF_CLIMATE_DURATION,
+    CONF_CLIMATE_MAX_TEMPERATURE,
     CONF_CLIMATE_TEMPERATURE,
     CONF_FORCE_REFRESH_INTERVAL,
     CONF_OTP_CODE,
@@ -333,15 +334,21 @@ class MoolinkOptionsFlow(OptionsFlowWithReload):
         """Manage the options."""
         errors: dict[str, str] = {}
         if user_input is not None:
+            temperature = user_input[CONF_CLIMATE_TEMPERATURE]
+            maximum = user_input.get(CONF_CLIMATE_MAX_TEMPERATURE)
             try:
                 if self.config_entry.state is ConfigEntryState.LOADED:
-                    self.config_entry.runtime_data.validate_temperature(
-                        user_input[CONF_CLIMATE_TEMPERATURE]
+                    # The maximum is checked below against the value being saved.
+                    self.config_entry.runtime_data.validate_temperature_range(
+                        temperature
                     )
             except ServiceValidationError:
                 errors[CONF_CLIMATE_TEMPERATURE] = "invalid_temperature"
             else:
-                return self.async_create_entry(data=user_input)
+                if maximum is not None and temperature > maximum:
+                    errors[CONF_CLIMATE_TEMPERATURE] = "above_max"
+                else:
+                    return self.async_create_entry(data=user_input)
 
         opts = {**self.config_entry.options, **(user_input or {})}
         schema = vol.Schema(
@@ -392,6 +399,16 @@ class MoolinkOptionsFlow(OptionsFlowWithReload):
                             self.config_entry.data[CONF_REGION]
                         ),
                     ),
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=14, max=90, step=0.5, mode=NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional(
+                    CONF_CLIMATE_MAX_TEMPERATURE,
+                    description={
+                        "suggested_value": opts.get(CONF_CLIMATE_MAX_TEMPERATURE)
+                    },
                 ): NumberSelector(
                     NumberSelectorConfig(
                         min=14, max=90, step=0.5, mode=NumberSelectorMode.BOX

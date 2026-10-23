@@ -34,6 +34,7 @@ from .const import (
     ACTION_STATUS_INTERVAL,
     COMMAND_REFRESH_DELAY,
     CONF_BRAND,
+    CONF_CLIMATE_MAX_TEMPERATURE,
     CONF_FORCE_REFRESH_INTERVAL,
     CONF_PIN,
     CONF_QUIET_END,
@@ -101,6 +102,7 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         self.api_counter.attach(getattr(self.vehicle_manager.api, "session", None))
         # Day on which Bluelink said the daily request limit was used up.
         self.rate_limited_on: date | None = None
+        self.climate_max: float | None = entry.options.get(CONF_CLIMATE_MAX_TEMPERATURE)
         self.quiet_start = _parse_time(
             entry.options.get(CONF_QUIET_START, DEFAULT_QUIET_START)
         )
@@ -117,6 +119,14 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         self._pending: dict[str, str] = {}
 
     def validate_temperature(self, value: float) -> None:
+        """Reject temperatures the region's API or the car won't accept."""
+        self.validate_temperature_range(value)
+        if self.climate_max is not None and value > self.climate_max:
+            raise ServiceValidationError(
+                f"Temperature {value} is above your car's maximum of {self.climate_max}"
+            )
+
+    def validate_temperature_range(self, value: float) -> None:
         """Reject temperatures the region's API can't encode."""
         allowed = getattr(self.vehicle_manager.api, "temperature_range", None)
         if allowed and value not in allowed:

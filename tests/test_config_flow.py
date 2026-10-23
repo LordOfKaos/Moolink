@@ -122,7 +122,7 @@ async def test_options_flow(
     assert result["type"] is FlowResultType.FORM
     # US entries default to Fahrenheit.
     schema = result["data_schema"].schema
-    defaults = {str(k): k.default() for k in schema}
+    defaults = {str(k): k.default() for k in schema if callable(k.default)}
     assert defaults["climate_temperature"] == 70.0
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
