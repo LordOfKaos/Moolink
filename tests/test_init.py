@@ -11,7 +11,10 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from hyundai_kia_connect_api.const import ENGINE_TYPES
-from hyundai_kia_connect_api.exceptions import AuthenticationError
+from hyundai_kia_connect_api.exceptions import (
+    AuthenticationError,
+    DuplicateRequestError,
+)
 
 from custom_components.moolink.const import DOMAIN
 
@@ -210,6 +213,58 @@ async def test_wrong_pin_explains_how_to_fix(
         "PIN verification failed, ensure PIN is entered correctly."
     )
     with pytest.raises(HomeAssistantError, match="Reconfigure"):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.ioniq_5_flash_hazard_lights"},
+            blocking=True,
+        )
+
+
+async def test_second_press_while_busy_is_refused(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    """A double press must not send a second command to the car."""
+    await _setup(hass, config_entry)
+    press = {"entity_id": "button.ioniq_5_flash_hazard_lights"}
+    await hass.services.async_call("button", "press", press, blocking=True)
+    with pytest.raises(HomeAssistantError, match="still carrying out"):
+        await hass.services.async_call("button", "press", press, blocking=True)
+    mock_vm.start_hazard_lights.assert_called_once_with(VIN)
+
+
+async def test_next_command_allowed_once_car_has_acted(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    press = {"entity_id": "button.ioniq_5_flash_hazard_lights"}
+    with patch("custom_components.moolink.coordinator.COMMAND_REFRESH_DELAY", 0):
+        await hass.services.async_call("button", "press", press, blocking=True)
+        await hass.async_block_till_done()
+        await hass.services.async_call("button", "press", press, blocking=True)
+        await hass.async_block_till_done()
+    assert mock_vm.start_hazard_lights.call_count == 2
+
+
+async def test_failed_send_does_not_block_retry(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    press = {"entity_id": "button.ioniq_5_flash_hazard_lights"}
+    mock_vm.start_hazard_lights.side_effect = RuntimeError("network down")
+    with pytest.raises(HomeAssistantError, match="network down"):
+        await hass.services.async_call("button", "press", press, blocking=True)
+    mock_vm.start_hazard_lights.side_effect = None
+    await hass.services.async_call("button", "press", press, blocking=True)
+    assert mock_vm.start_hazard_lights.call_count == 2
+
+
+async def test_bluelink_duplicate_request_is_explained(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    mock_vm.start_hazard_lights.side_effect = DuplicateRequestError("Duplicate")
+    with pytest.raises(HomeAssistantError, match="still processing"):
         await hass.services.async_call(
             "button",
             "press",

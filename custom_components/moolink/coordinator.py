@@ -21,6 +21,7 @@ from hyundai_kia_connect_api import Token, Vehicle, VehicleManager
 from hyundai_kia_connect_api.const import ORDER_STATUS
 from hyundai_kia_connect_api.exceptions import (
     AuthenticationError,
+    DuplicateRequestError,
     HyundaiKiaException,
 )
 
@@ -39,6 +40,17 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# How commands are described in errors; others fall back to the method name.
+COMMAND_NAMES = {
+    "start_hazard_lights": "flash hazard lights",
+    "start_hazard_lights_and_horn": "hazard lights and horn",
+    "start_climate": "start climate",
+    "stop_climate": "stop climate",
+    "start_charge": "start charging",
+    "stop_charge": "stop charging",
+    "set_charge_limits": "set charge limits",
+}
 
 type MoolinkConfigEntry = ConfigEntry[MoolinkCoordinator]
 
@@ -78,6 +90,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         )
         # The library is synchronous and not thread-safe; serialize all calls.
         self._api_lock = asyncio.Lock()
+        # Command still being carried out, per vehicle. Bluelink rejects a
+        # second command while one is in progress, so we refuse it up front.
+        self._pending: dict[str, str] = {}
 
     def validate_temperature(self, value: float) -> None:
         """Reject temperatures the region's API can't encode."""
@@ -150,25 +165,23 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         self, vehicle_id: str, method: str, *args: Any
     ) -> None:
         """Send a remote command and refresh state once the car has acted."""
+        if pending := self._pending.get(vehicle_id):
+            raise HomeAssistantError(
+                f"The car is still carrying out '{_command_name(pending)}'. "
+                "Wait for it to finish, then try again."
+            )
+        self._pending[vehicle_id] = method
         func = getattr(self.vehicle_manager, method)
         try:
             action_id = await self._async_run(func, vehicle_id, *args)
-        except NotImplementedError as err:
-            raise HomeAssistantError(
-                f"'{method}' is not supported for this region"
-            ) from err
-        except AuthenticationError as err:
-            self.config_entry.async_start_reauth(self.hass)
-            raise HomeAssistantError(f"Bluelink authentication failed: {err}") from err
         except Exception as err:
-            if "PIN" in str(err):
-                raise HomeAssistantError(
-                    "Bluelink rejected your PIN. Update it under Settings → "
-                    "Devices & services → Moolink → ⋮ → Reconfigure."
-                ) from err
-            raise HomeAssistantError(
-                f"Bluelink command '{method}' failed: {err}"
-            ) from err
+            self._pending.pop(vehicle_id, None)
+            if isinstance(err, AuthenticationError):
+                self.config_entry.async_start_reauth(self.hass)
+            raise _command_error(method, err) from err
+        except BaseException:
+            self._pending.pop(vehicle_id, None)
+            raise
 
         self.config_entry.async_create_background_task(
             self.hass,
@@ -181,25 +194,30 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
     ) -> None:
         """Wait for the command to complete, then refresh the vehicle."""
         status: ORDER_STATUS | None = None
-        if action_id:
-            try:
-                # Polls without holding the API lock so other calls aren't blocked.
-                status = await self.hass.async_add_executor_job(
-                    self.vehicle_manager.check_action_status,
-                    vehicle_id,
-                    action_id,
-                    True,
-                    ACTION_STATUS_TIMEOUT,
-                )
-            except Exception:  # noqa: BLE001 - not every region supports this
-                _LOGGER.debug("Action status unavailable for %s", method)
-        if status is None:
-            await asyncio.sleep(COMMAND_REFRESH_DELAY)
-        elif status in (ORDER_STATUS.FAILED, ORDER_STATUS.TIMEOUT):
+        try:
+            if action_id:
+                try:
+                    # Polls without holding the API lock so other calls aren't
+                    # blocked.
+                    status = await self.hass.async_add_executor_job(
+                        self.vehicle_manager.check_action_status,
+                        vehicle_id,
+                        action_id,
+                        True,
+                        ACTION_STATUS_TIMEOUT,
+                    )
+                except Exception:  # noqa: BLE001 - not every region supports this
+                    _LOGGER.debug("Action status unavailable for %s", method)
+            if status is None:
+                await asyncio.sleep(COMMAND_REFRESH_DELAY)
+        finally:
+            self._pending.pop(vehicle_id, None)
+
+        if status in (ORDER_STATUS.FAILED, ORDER_STATUS.TIMEOUT):
             _LOGGER.warning(
                 "Bluelink command %s finished with %s", method, status.value
             )
-        else:
+        elif status is not None:
             _LOGGER.debug("Bluelink command %s finished with %s", method, status.value)
 
         try:
@@ -210,3 +228,27 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             _LOGGER.debug("Refresh after %s failed: %s", method, err)
             return
         self.async_set_updated_data(dict(self.vehicle_manager.vehicles))
+
+
+def _command_name(method: str) -> str:
+    return COMMAND_NAMES.get(method, method.replace("_", " "))
+
+
+def _command_error(method: str, err: Exception) -> HomeAssistantError:
+    """Turn a library error from a command into a message for the user."""
+    name = _command_name(method)
+    if isinstance(err, AuthenticationError):
+        return HomeAssistantError(f"Bluelink authentication failed: {err}")
+    if isinstance(err, NotImplementedError):
+        return HomeAssistantError(f"'{name}' is not supported for this region")
+    if isinstance(err, DuplicateRequestError):
+        return HomeAssistantError(
+            f"Bluelink is still processing a previous command, so '{name}' "
+            "was not sent. Wait a minute, then try again."
+        )
+    if "PIN" in str(err):
+        return HomeAssistantError(
+            "Bluelink rejected your PIN. Update it under Settings → "
+            "Devices & services → Moolink → ⋮ → Reconfigure."
+        )
+    return HomeAssistantError(f"Bluelink command '{name}' failed: {err}")
