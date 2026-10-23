@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.const import CONF_USERNAME
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from hyundai_kia_connect_api import Vehicle
 from hyundai_kia_connect_api.ApiImpl import ApiImpl
@@ -39,6 +40,18 @@ def vehicle_unit(vehicle: Vehicle, key: str) -> str | None:
     """Return the unit the library reported for a value, if any."""
     return getattr(vehicle, f"{key}_unit", None) or getattr(
         vehicle, f"_{key}_unit", None
+    )
+
+
+def account_device_info(coordinator: MoolinkCoordinator) -> DeviceInfo:
+    """Device for things that belong to the Bluelink login, not one car."""
+    entry = coordinator.config_entry
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        entry_type=DeviceEntryType.SERVICE,
+        manufacturer=BRANDS.get(entry.data[CONF_BRAND]),
+        model="Bluelink account",
+        name=f"Bluelink {entry.data[CONF_USERNAME]}",
     )
 
 

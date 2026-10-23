@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -17,14 +17,17 @@ from homeassistant.exceptions import (
     ServiceValidationError,
 )
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 from hyundai_kia_connect_api import Token, Vehicle, VehicleManager
 from hyundai_kia_connect_api.const import ORDER_STATUS
 from hyundai_kia_connect_api.exceptions import (
     AuthenticationError,
     DuplicateRequestError,
     HyundaiKiaException,
+    RateLimitingError,
 )
 
+from .api_counter import ApiRequestCounter
 from .const import (
     ACTION_STATUS_TIMEOUT,
     COMMAND_REFRESH_DELAY,
@@ -50,6 +53,7 @@ COMMAND_NAMES = {
     "start_charge": "start charging",
     "stop_charge": "stop charging",
     "set_charge_limits": "set charge limits",
+    "force_refresh_vehicle_state": "force refresh",
 }
 
 type MoolinkConfigEntry = ConfigEntry[MoolinkCoordinator]
@@ -85,6 +89,10 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             ),
         )
         self.vehicle_manager = build_vehicle_manager(dict(entry.data))
+        self.api_counter = ApiRequestCounter(entry.data[CONF_REGION])
+        self.api_counter.attach(getattr(self.vehicle_manager.api, "session", None))
+        # Day on which Bluelink said the daily request limit was used up.
+        self.rate_limited_on: date | None = None
         self.force_refresh_interval: int = entry.options.get(
             CONF_FORCE_REFRESH_INTERVAL, DEFAULT_FORCE_REFRESH_INTERVAL
         )
@@ -133,10 +141,28 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         else:
             vm.update_all_vehicles_with_cached_state()
 
+    @property
+    def rate_limited(self) -> bool:
+        """Whether Bluelink's daily request limit is used up for today."""
+        return self.rate_limited_on == dt_util.now().date()
+
     async def _async_update_data(self) -> dict[str, Vehicle]:
         """Fetch the latest state of all vehicles."""
+        if self.rate_limited and self.data is not None:
+            # Polling now would only be refused again; keep the last state.
+            return self.data
         try:
             await self._async_run(self._update_all)
+        except RateLimitingError as err:
+            self.rate_limited_on = dt_util.now().date()
+            _LOGGER.warning(
+                "Bluelink's daily request limit is used up; polling paused until "
+                "midnight (%s requests counted today)",
+                self.api_counter.count,
+            )
+            if self.data is not None:
+                return self.data
+            raise UpdateFailed("Bluelink's daily request limit is used up") from err
         except AuthenticationError as err:
             # Includes AuthenticationOTPRequired; both need user interaction.
             raise ConfigEntryAuthFailed(str(err)) from err
@@ -154,6 +180,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
                 await self._async_run(vm.force_refresh_all_vehicles_states)
             else:
                 await self._async_run(vm.force_refresh_vehicle_state, vehicle_id)
+        except RateLimitingError as err:
+            self.rate_limited_on = dt_util.now().date()
+            raise _command_error("force_refresh_vehicle_state", err) from err
         except AuthenticationError as err:
             self.config_entry.async_start_reauth(self.hass)
             raise HomeAssistantError(f"Bluelink authentication failed: {err}") from err
@@ -241,6 +270,11 @@ def _command_error(method: str, err: Exception) -> HomeAssistantError:
         return HomeAssistantError(f"Bluelink authentication failed: {err}")
     if isinstance(err, NotImplementedError):
         return HomeAssistantError(f"'{name}' is not supported for this region")
+    if isinstance(err, RateLimitingError):
+        return HomeAssistantError(
+            f"Bluelink's daily request limit is used up, so '{name}' was not "
+            "sent. It resets at midnight."
+        )
     if isinstance(err, DuplicateRequestError):
         return HomeAssistantError(
             f"Bluelink is still processing a previous command, so '{name}' "

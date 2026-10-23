@@ -254,6 +254,9 @@
       },
       "last_updated_at": {
         "name": "Last updated"
+      },
+      "api_requests_today": {
+        "name": "API requests today"
       }
     },
     "switch": {

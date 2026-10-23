@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
@@ -19,9 +21,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import MoolinkConfigEntry, MoolinkCoordinator
-from .entity import MoolinkEntity, reports, vehicle_unit
+from .entity import MoolinkEntity, account_device_info, reports, vehicle_unit
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -150,12 +153,14 @@ async def async_setup_entry(
 ) -> None:
     """Create sensors for every value the vehicle actually reports."""
     coordinator = entry.runtime_data
-    async_add_entities(
+    entities: list[SensorEntity] = [
         MoolinkSensor(coordinator, vehicle_id, description)
         for vehicle_id, vehicle in coordinator.data.items()
         for description in SENSORS
         if reports(vehicle, description.key)
-    )
+    ]
+    entities.append(MoolinkApiRequestsSensor(coordinator))
+    async_add_entities(entities)
 
 
 class MoolinkSensor(MoolinkEntity, SensorEntity):
@@ -187,3 +192,51 @@ class MoolinkSensor(MoolinkEntity, SensorEntity):
         if self.entity_description.unit_from_vehicle:
             return vehicle_unit(self.vehicle, self.entity_description.key)
         return self.entity_description.native_unit_of_measurement
+
+
+class MoolinkApiRequestsSensor(CoordinatorEntity[MoolinkCoordinator], RestoreSensor):
+    """Requests made to the Bluelink cloud today, for the whole account."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "api_requests_today"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    def __init__(self, coordinator: MoolinkCoordinator) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_api_requests"
+        self._attr_device_info = account_device_info(coordinator)
+
+    async def async_added_to_hass(self) -> None:
+        """Carry today's count over a restart."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is None:
+            return
+        try:
+            day = date.fromisoformat(last.attributes.get("date", ""))
+            count = int(last.state)
+        except ValueError:
+            return
+        self.coordinator.api_counter.restore(day, count)
+
+    @property
+    def available(self) -> bool:
+        """The count stays meaningful while Bluelink is unreachable."""
+        return True
+
+    @property
+    def native_value(self) -> int:
+        """Return today's request count."""
+        return self.coordinator.api_counter.count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the day, the known limit and whether it was hit."""
+        counter = self.coordinator.api_counter
+        return {
+            "date": counter.day.isoformat(),
+            "daily_limit": counter.daily_limit,
+            "limit_reached": self.coordinator.rate_limited,
+        }

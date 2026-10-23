@@ -118,6 +118,10 @@ def default_climate_temperature(region: int) -> float:
     return 70.0 if region == REGION_USA else 21.0
 
 
+# Daily request limit commonly reported for Hyundai/Kia Europe. Hyundai
+# doesn't publish it; exceeding it returns error 5091 until midnight.
+EU_DAILY_REQUEST_LIMIT = 200
+
 # Delay before re-reading state after a remote command was sent.
 COMMAND_REFRESH_DELAY = 30  # seconds
 ACTION_STATUS_TIMEOUT = 60  # seconds
