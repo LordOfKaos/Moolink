@@ -141,7 +141,15 @@ GitHub Actions run on every push:
 | `CI / test` | Tests against a real Home Assistant test instance, with the Bluelink cloud mocked. Covers setup, every platform, commands, actions, the config/OTP/reauth/options flows, EU rules (PIN, °C range, UK region default), and a contract check that the library still has every field and region this integration uses |
 | `CI / hassfest` | Home Assistant's own manifest, services and translation validator |
 | `CI / hacs` | HACS repository validation |
+| `Release` | After CI passes on `main`, publishes a GitHub release for a new `manifest.json` version, with notes listing every commit since the last release |
 | `Bluelink library compatibility` | Weekly (and on demand): reruns the tests against the newest `hyundai_kia_connect_api`, so an upstream change that breaks this integration is caught before you bump the version |
+
+### Releasing
+
+Bump `version` in `custom_components/moolink/manifest.json` and push to
+`main`. Once CI passes, the `Release` workflow tags `v<version>` and
+publishes the release, which HACS then offers as an update. Pushes that
+don't change the version don't create a release.
 
 The tests never contact Hyundai, so they need no credentials and can't
 touch your car.
