@@ -1,0 +1,26 @@
+name: Bluelink library compatibility
+
+# Bluelink's API changes often, and so does hyundai_kia_connect_api. Every
+# week, run the tests against its newest release so a breaking upgrade
+# shows up here before you bump the version in manifest.json.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latest-library:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements_test.txt
+      - run: pip install --upgrade hyundai_kia_connect_api
+      - run: pip show hyundai_kia_connect_api | head -2
+      - run: pytest

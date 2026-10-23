@@ -1,0 +1,339 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your Bluelink account",
+        "description": "Use the same login as the Bluelink app. The region is where your account is registered (UK and Ireland: Europe).",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "pin": "PIN",
+          "region": "Region",
+          "brand": "Brand"
+        },
+        "data_description": {
+          "pin": "Your 4-digit Bluelink PIN. Required in Europe, and needed for remote commands in most other regions."
+        }
+      },
+      "otp_method": {
+        "title": "Verify it's you",
+        "description": "Bluelink wants to confirm this new device. Choose where to send a one-time code.",
+        "data": {
+          "otp_method": "Send code via"
+        }
+      },
+      "otp_code": {
+        "title": "Enter code",
+        "description": "Enter the one-time code Bluelink just sent you.",
+        "data": {
+          "otp_code": "Code"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Bluelink",
+        "description": "The login for {username} stopped working. Enter the password again.",
+        "data": {
+          "password": "Password",
+          "pin": "PIN"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email, password, or region.",
+      "cannot_connect": "Could not reach the Bluelink servers. Check the logs for details.",
+      "invalid_otp": "That code was not accepted.",
+      "otp_send_failed": "Bluelink could not send the code.",
+      "pin_required": "Bluelink in Europe needs your PIN for remote commands."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Moolink options",
+        "data": {
+          "scan_interval": "Poll interval",
+          "force_refresh_interval": "Force refresh interval",
+          "climate_temperature": "Climate temperature",
+          "climate_duration": "Climate duration",
+          "climate_defrost": "Defrost when starting climate"
+        },
+        "data_description": {
+          "scan_interval": "How often to read the state cached in the Bluelink cloud. This does not wake the car.",
+          "force_refresh_interval": "How old cached data may get before the car is woken up for fresh data. Each wake-up uses some 12V battery. 0 disables it.",
+          "climate_temperature": "Used by the Climate switch. Use °F in the USA and °C elsewhere, including the UK."
+        }
+      }
+    },
+    "error": {
+      "invalid_temperature": "Your region's API doesn't accept that temperature. Europe: 14-31.5 °C in 0.5 steps. USA: 62-81 °F."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "engine_is_running": {
+        "name": "Engine"
+      },
+      "front_left_door_is_open": {
+        "name": "Front left door"
+      },
+      "front_right_door_is_open": {
+        "name": "Front right door"
+      },
+      "back_left_door_is_open": {
+        "name": "Rear left door"
+      },
+      "back_right_door_is_open": {
+        "name": "Rear right door"
+      },
+      "trunk_is_open": {
+        "name": "Trunk"
+      },
+      "hood_is_open": {
+        "name": "Hood"
+      },
+      "front_left_window_is_open": {
+        "name": "Front left window"
+      },
+      "front_right_window_is_open": {
+        "name": "Front right window"
+      },
+      "back_left_window_is_open": {
+        "name": "Rear left window"
+      },
+      "back_right_window_is_open": {
+        "name": "Rear right window"
+      },
+      "sunroof_is_open": {
+        "name": "Sunroof"
+      },
+      "ev_battery_is_charging": {
+        "name": "Charging"
+      },
+      "ev_battery_is_plugged_in": {
+        "name": "Plugged in"
+      },
+      "ev_charge_port_door_is_open": {
+        "name": "Charge port door"
+      },
+      "defrost_is_on": {
+        "name": "Defrost"
+      },
+      "steering_wheel_heater_is_on": {
+        "name": "Steering wheel heater"
+      },
+      "back_window_heater_is_on": {
+        "name": "Rear window heater"
+      },
+      "side_mirror_heater_is_on": {
+        "name": "Side mirror heater"
+      },
+      "fuel_level_is_low": {
+        "name": "Low fuel"
+      },
+      "tire_pressure_all_warning_is_on": {
+        "name": "Tire pressure warning"
+      },
+      "washer_fluid_warning_is_on": {
+        "name": "Washer fluid warning"
+      },
+      "brake_fluid_warning_is_on": {
+        "name": "Brake fluid warning"
+      },
+      "oil_level_warning_is_on": {
+        "name": "Oil level warning"
+      },
+      "smart_key_battery_warning_is_on": {
+        "name": "Key fob battery warning"
+      },
+      "battery_auxiliary_fail_warning_is_on": {
+        "name": "12V battery warning"
+      }
+    },
+    "button": {
+      "force_refresh": {
+        "name": "Force refresh"
+      },
+      "hazard_lights": {
+        "name": "Flash hazard lights"
+      },
+      "hazard_lights_and_horn": {
+        "name": "Hazard lights and horn"
+      },
+      "open_charge_port": {
+        "name": "Open charge port"
+      },
+      "close_charge_port": {
+        "name": "Close charge port"
+      }
+    },
+    "device_tracker": {
+      "location": {
+        "name": "Location"
+      }
+    },
+    "lock": {
+      "door_lock": {
+        "name": "Doors"
+      }
+    },
+    "number": {
+      "ev_charge_limits_ac": {
+        "name": "AC charge limit"
+      },
+      "ev_charge_limits_dc": {
+        "name": "DC charge limit"
+      }
+    },
+    "sensor": {
+      "odometer": {
+        "name": "Odometer"
+      },
+      "total_driving_range": {
+        "name": "Range"
+      },
+      "fuel_driving_range": {
+        "name": "Fuel range"
+      },
+      "ev_driving_range": {
+        "name": "EV range"
+      },
+      "next_service_distance": {
+        "name": "Next service"
+      },
+      "fuel_level": {
+        "name": "Fuel level"
+      },
+      "ev_battery_percentage": {
+        "name": "EV battery"
+      },
+      "ev_battery_soh_percentage": {
+        "name": "EV battery health"
+      },
+      "car_battery_percentage": {
+        "name": "12V battery"
+      },
+      "ev_charging_power": {
+        "name": "Charging power"
+      },
+      "ev_estimated_current_charge_duration": {
+        "name": "Time to full"
+      },
+      "outside_temperature": {
+        "name": "Outside temperature"
+      },
+      "air_temperature": {
+        "name": "Climate set temperature"
+      },
+      "tire_pressure_front_left": {
+        "name": "Front left tire pressure"
+      },
+      "tire_pressure_front_right": {
+        "name": "Front right tire pressure"
+      },
+      "tire_pressure_rear_left": {
+        "name": "Rear left tire pressure"
+      },
+      "tire_pressure_rear_right": {
+        "name": "Rear right tire pressure"
+      },
+      "dtc_count": {
+        "name": "Diagnostic trouble codes"
+      },
+      "last_updated_at": {
+        "name": "Last updated"
+      }
+    },
+    "switch": {
+      "climate": {
+        "name": "Climate"
+      },
+      "charging": {
+        "name": "Charging"
+      }
+    }
+  },
+  "services": {
+    "start_climate": {
+      "name": "Start climate",
+      "description": "Start remote climate control with specific settings.",
+      "fields": {
+        "device_id": {
+          "name": "Vehicle",
+          "description": "The vehicle to control."
+        },
+        "temperature": {
+          "name": "Temperature",
+          "description": "Cabin temperature: °F in the USA, °C elsewhere (Europe: 14-31.5 in 0.5 steps). Defaults to the integration option."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Minutes to run. Defaults to the integration option."
+        },
+        "defrost": {
+          "name": "Defrost",
+          "description": "Turn on front defrost."
+        },
+        "climate": {
+          "name": "Climate",
+          "description": "Run the HVAC. Turn off to only use heaters."
+        },
+        "heating": {
+          "name": "Heating",
+          "description": "Heated accessories: 0 off, 1 steering wheel and rear window, 2 rear window, 3 steering wheel, 4 all (region dependent)."
+        },
+        "front_left_seat": {
+          "name": "Front left seat",
+          "description": "Seat level as the region's API expects (often 0 off, 6-8 heat low-high, 3-5 cool low-high)."
+        },
+        "front_right_seat": {
+          "name": "Front right seat",
+          "description": "See front left seat."
+        },
+        "rear_left_seat": {
+          "name": "Rear left seat",
+          "description": "See front left seat."
+        },
+        "rear_right_seat": {
+          "name": "Rear right seat",
+          "description": "See front left seat."
+        },
+        "steering_wheel": {
+          "name": "Steering wheel",
+          "description": "Steering wheel heat level (0 off)."
+        }
+      }
+    },
+    "force_refresh": {
+      "name": "Force refresh",
+      "description": "Wake the vehicle and fetch fresh data. Uses some 12V battery.",
+      "fields": {
+        "device_id": {
+          "name": "Vehicle",
+          "description": "Vehicle to refresh. Leave empty for all vehicles."
+        }
+      }
+    },
+    "set_charge_limits": {
+      "name": "Set charge limits",
+      "description": "Set the AC and DC target state of charge.",
+      "fields": {
+        "device_id": {
+          "name": "Vehicle",
+          "description": "The vehicle to control."
+        },
+        "ac_limit": {
+          "name": "AC limit",
+          "description": "Target charge for AC charging (50-100%)."
+        },
+        "dc_limit": {
+          "name": "DC limit",
+          "description": "Target charge for DC fast charging (50-100%)."
+        }
+      }
+    }
+  }
+}

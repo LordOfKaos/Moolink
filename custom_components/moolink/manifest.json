@@ -1,0 +1,14 @@
+{
+  "domain": "moolink",
+  "name": "Moolink (Hyundai Bluelink)",
+  "codeowners": ["@lordofkaos"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/lordofkaos/moolink",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/lordofkaos/moolink/issues",
+  "loggers": ["hyundai_kia_connect_api"],
+  "requirements": ["hyundai_kia_connect_api==4.39.0"],
+  "version": "0.1.0"
+}
