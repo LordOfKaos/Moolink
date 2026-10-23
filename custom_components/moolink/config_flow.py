@@ -28,6 +28,7 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
+    TimeSelector,
 )
 from hyundai_kia_connect_api import VehicleManager
 from hyundai_kia_connect_api.const import OTP_NOTIFY_TYPE
@@ -44,12 +45,16 @@ from .const import (
     CONF_OTP_CODE,
     CONF_OTP_METHOD,
     CONF_PIN,
+    CONF_QUIET_END,
+    CONF_QUIET_START,
     CONF_REGION,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
     DEFAULT_CLIMATE_DEFROST,
     DEFAULT_CLIMATE_DURATION,
     DEFAULT_FORCE_REFRESH_INTERVAL,
+    DEFAULT_QUIET_END,
+    DEFAULT_QUIET_START,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     PIN_REQUIRED_REGIONS,
@@ -371,6 +376,14 @@ class MoolinkOptionsFlow(OptionsFlowWithReload):
                     ),
                     vol.Coerce(int),
                 ),
+                vol.Required(
+                    CONF_QUIET_START,
+                    default=opts.get(CONF_QUIET_START, DEFAULT_QUIET_START),
+                ): TimeSelector(),
+                vol.Required(
+                    CONF_QUIET_END,
+                    default=opts.get(CONF_QUIET_END, DEFAULT_QUIET_END),
+                ): TimeSelector(),
                 vol.Required(
                     CONF_CLIMATE_TEMPERATURE,
                     default=opts.get(

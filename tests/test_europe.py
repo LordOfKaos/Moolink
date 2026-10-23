@@ -14,7 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.moolink.const import CONF_TOKEN, DOMAIN
 
-from .conftest import ENTRY_DATA, make_token
+from .conftest import ENTRY_DATA, NO_QUIET_HOURS, make_token
 
 EU_INPUT = {**ENTRY_DATA, "region": "1", "brand": "2"}
 
@@ -33,6 +33,7 @@ def eu_entry() -> MockConfigEntry:
         domain=DOMAIN,
         unique_id=f"1_2_{ENTRY_DATA['username']}",
         data={**ENTRY_DATA, "region": 1, CONF_TOKEN: make_token().to_dict()},
+        options=NO_QUIET_HOURS,
     )
 
 

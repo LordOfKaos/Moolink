@@ -239,4 +239,5 @@ class MoolinkApiRequestsSensor(CoordinatorEntity[MoolinkCoordinator], RestoreSen
             "date": counter.day.isoformat(),
             "daily_limit": counter.daily_limit,
             "limit_reached": self.coordinator.rate_limited,
+            "polling_paused": self.coordinator.polling_paused_reason,
         }

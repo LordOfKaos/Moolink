@@ -21,6 +21,7 @@ from custom_components.moolink.const import (
 )
 
 VIN = "KM8TESTVIN0000001"
+NO_QUIET_HOURS = {"quiet_start": "00:00:00", "quiet_end": "00:00:00"}
 ENTRY_DATA = {
     CONF_USERNAME: "driver@example.com",
     CONF_PASSWORD: "hunter2",
@@ -90,5 +91,7 @@ def config_entry() -> MockConfigEntry:
         domain=DOMAIN,
         unique_id=f"3_2_{ENTRY_DATA[CONF_USERNAME]}",
         data={**ENTRY_DATA, CONF_TOKEN: make_token().to_dict()},
+        # Quiet hours off, so tests don't depend on the time of day they run.
+        options=NO_QUIET_HOURS,
         title="Hyundai driver@example.com",
     )

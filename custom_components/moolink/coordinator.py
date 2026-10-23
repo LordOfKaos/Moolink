@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -34,12 +34,17 @@ from .const import (
     CONF_BRAND,
     CONF_FORCE_REFRESH_INTERVAL,
     CONF_PIN,
+    CONF_QUIET_END,
+    CONF_QUIET_START,
     CONF_REGION,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
     DEFAULT_FORCE_REFRESH_INTERVAL,
+    DEFAULT_QUIET_END,
+    DEFAULT_QUIET_START,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    REQUEST_RESERVE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -93,6 +98,12 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         self.api_counter.attach(getattr(self.vehicle_manager.api, "session", None))
         # Day on which Bluelink said the daily request limit was used up.
         self.rate_limited_on: date | None = None
+        self.quiet_start = _parse_time(
+            entry.options.get(CONF_QUIET_START, DEFAULT_QUIET_START)
+        )
+        self.quiet_end = _parse_time(
+            entry.options.get(CONF_QUIET_END, DEFAULT_QUIET_END)
+        )
         self.force_refresh_interval: int = entry.options.get(
             CONF_FORCE_REFRESH_INTERVAL, DEFAULT_FORCE_REFRESH_INTERVAL
         )
@@ -146,10 +157,33 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         """Whether Bluelink's daily request limit is used up for today."""
         return self.rate_limited_on == dt_util.now().date()
 
+    def in_quiet_hours(self) -> bool:
+        """Whether automatic polling is off right now (overnight window)."""
+        start, end = self.quiet_start, self.quiet_end
+        if start == end:
+            return False
+        now = dt_util.now().time()
+        if start < end:
+            return start <= now < end
+        return now >= start or now < end
+
+    @property
+    def polling_paused_reason(self) -> str | None:
+        """Why automatic polling is currently skipped, if it is."""
+        if self.rate_limited:
+            return "daily limit reached"
+        limit = self.api_counter.daily_limit
+        if limit is not None and self.api_counter.count >= limit - REQUEST_RESERVE:
+            return "saving remaining requests for commands"
+        if self.in_quiet_hours():
+            return "quiet hours"
+        return None
+
     async def _async_update_data(self) -> dict[str, Vehicle]:
         """Fetch the latest state of all vehicles."""
-        if self.rate_limited and self.data is not None:
-            # Polling now would only be refused again; keep the last state.
+        if self.data is not None and (reason := self.polling_paused_reason):
+            # Keep showing the last state; commands still work.
+            _LOGGER.debug("Skipping Bluelink poll: %s", reason)
             return self.data
         try:
             await self._async_run(self._update_all)
@@ -257,6 +291,13 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             _LOGGER.debug("Refresh after %s failed: %s", method, err)
             return
         self.async_set_updated_data(dict(self.vehicle_manager.vehicles))
+
+
+def _parse_time(value: str) -> time:
+    parsed = dt_util.parse_time(value)
+    if parsed is None:
+        raise ValueError(f"Invalid time {value!r}")
+    return parsed
 
 
 def _command_name(method: str) -> str:

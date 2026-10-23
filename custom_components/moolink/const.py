@@ -28,6 +28,8 @@ CONF_FORCE_REFRESH_INTERVAL = "force_refresh_interval"
 CONF_CLIMATE_TEMPERATURE = "climate_temperature"
 CONF_CLIMATE_DURATION = "climate_duration"
 CONF_CLIMATE_DEFROST = "climate_defrost"
+CONF_QUIET_START = "quiet_start"
+CONF_QUIET_END = "quiet_end"
 
 # Region / brand ids as defined by hyundai_kia_connect_api.const
 REGIONS: dict[int, str] = {
@@ -117,6 +119,14 @@ def default_climate_temperature(region: int) -> float:
     """Default cabin temperature in the unit the region's API expects."""
     return 70.0 if region == REGION_USA else 21.0
 
+
+# Overnight window with no automatic polling (no requests, car never woken).
+# Setting start and end to the same time turns it off.
+DEFAULT_QUIET_START = "22:00:00"
+DEFAULT_QUIET_END = "07:00:00"
+# Requests kept back for commands: automatic polling stops this close to a
+# known daily limit.
+REQUEST_RESERVE = 30
 
 # Daily request limit commonly reported for Hyundai/Kia Europe. Hyundai
 # doesn't publish it; exceeding it returns error 5091 until midnight.
