@@ -100,11 +100,13 @@ jobs:
             echo "${prs:-None}"
           } > report.md
           cat report.md >> "$GITHUB_STEP_SUMMARY"
-          issue="$(gh issue list --state open --search 'in:title "Weekly status report"' --json number --jq '.[0].number')"
+          # List rather than search: search lags behind newly created issues.
+          issue="$(gh issue list --state open --limit 200 --json number,title \
+            --jq 'map(select(.title == "Weekly status report"))[0].number // empty')"
           if [[ -z "$issue" ]]; then
-            gh issue create --title "Weekly status report" \
-              --body "Moolink posts a status report here every Monday. Subscribe to this issue to get them by email."
-            issue="$(gh issue list --state open --search 'in:title "Weekly status report"' --json number --jq '.[0].number')"
+            # `gh issue create` prints the new issue's URL, which `comment` accepts.
+            issue="$(gh issue create --title "Weekly status report" \
+              --body "Moolink posts a status report here every Monday. Subscribe to this issue to get them by email.")"
           fi
           gh issue comment "$issue" --body-file report.md
 
