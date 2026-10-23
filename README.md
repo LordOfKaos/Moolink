@@ -68,8 +68,11 @@ saved, so restarting Home Assistant doesn't trigger another code.
   PIN shows up as "PIN verification failed" when you send a command.
 - **Temperature:** in °C, from 14 to 31.5 in 0.5 steps. The default is 21.
   Values outside that range are rejected before anything is sent to the car.
-- **Units:** distances use what the car reports, so UK cars show miles.
-  Tire pressures use the car's own display unit.
+- **Units:** Home Assistant converts distances to its own unit system. If
+  yours is set to metric, a UK car's miles appear in km. To see miles, open
+  the sensor's settings and set **Unit of measurement** to `mi`, or switch
+  **Settings → System → General → Unit system** to US customary. Tire
+  pressures use the car's own display unit.
 - **Rate limits:** Hyundai Europe caps the number of API calls per day. The
   defaults (30-minute polling, a wake-up every 4 hours) stay well within it.
   Very short poll intervals or frequent force refreshes can lock you out

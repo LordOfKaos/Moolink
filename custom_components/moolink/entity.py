@@ -8,6 +8,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from hyundai_kia_connect_api import Vehicle
 from hyundai_kia_connect_api.ApiImpl import ApiImpl
+from hyundai_kia_connect_api.const import ENGINE_TYPES
 
 from .const import BRANDS, CONF_BRAND, DOMAIN
 from .coordinator import MoolinkCoordinator
@@ -21,6 +22,17 @@ def supports(coordinator: MoolinkCoordinator, api_method: str) -> bool:
     """
     impl = type(coordinator.vehicle_manager.api)
     return getattr(impl, api_method, None) is not getattr(ApiImpl, api_method, None)
+
+
+# Fuel values the cloud reports (as 0 / False) even for battery-electric cars.
+FUEL_KEYS = {"fuel_level", "fuel_driving_range", "fuel_level_is_low"}
+
+
+def reports(vehicle: Vehicle, key: str) -> bool:
+    """Return whether the vehicle has a meaningful value for an attribute."""
+    if key in FUEL_KEYS and vehicle.engine_type == ENGINE_TYPES.EV:
+        return False
+    return getattr(vehicle, key, None) is not None
 
 
 def vehicle_unit(vehicle: Vehicle, key: str) -> str | None:

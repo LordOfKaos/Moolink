@@ -9,6 +9,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from hyundai_kia_connect_api.const import ENGINE_TYPES
 from hyundai_kia_connect_api.exceptions import AuthenticationError
 
 from custom_components.moolink.const import DOMAIN
@@ -167,3 +169,34 @@ async def test_service_rejects_unknown_device(
         await hass.services.async_call(
             DOMAIN, "start_climate", {"device_id": "nope"}, blocking=True
         )
+
+
+async def test_ev_has_no_fuel_entities(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    vehicle = mock_vm.vehicles[VIN]
+    vehicle.engine_type = ENGINE_TYPES.EV
+    vehicle.fuel_level = 0
+    vehicle.fuel_level_is_low = False
+    await _setup(hass, config_entry)
+    assert hass.states.get("sensor.ioniq_5_fuel_level") is None
+    assert hass.states.get("binary_sensor.ioniq_5_low_fuel") is None
+    assert hass.states.get("sensor.ioniq_5_ev_battery") is not None
+
+
+async def test_petrol_car_keeps_fuel_entities(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    vehicle = mock_vm.vehicles[VIN]
+    vehicle.engine_type = ENGINE_TYPES.ICE
+    vehicle.fuel_level = 40
+    await _setup(hass, config_entry)
+    assert hass.states.get("sensor.ioniq_5_fuel_level").state == "40"
+
+
+async def test_distances_display_as_whole_numbers(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    entry = er.async_get(hass).async_get("sensor.ioniq_5_ev_range")
+    assert entry.options["sensor"]["suggested_display_precision"] == 0

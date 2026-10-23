@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import MoolinkConfigEntry, MoolinkCoordinator
-from .entity import MoolinkEntity
+from .entity import MoolinkEntity, reports
 
 _DOOR = BinarySensorDeviceClass.DOOR
 _WINDOW = BinarySensorDeviceClass.WINDOW
@@ -74,7 +74,7 @@ async def async_setup_entry(
         MoolinkBinarySensor(coordinator, vehicle_id, description)
         for vehicle_id, vehicle in coordinator.data.items()
         for description in BINARY_SENSORS
-        if getattr(vehicle, description.key, None) is not None
+        if reports(vehicle, description.key)
     )
 
 

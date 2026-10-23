@@ -21,7 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import MoolinkConfigEntry, MoolinkCoordinator
-from .entity import MoolinkEntity, vehicle_unit
+from .entity import MoolinkEntity, reports, vehicle_unit
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,6 +41,7 @@ def _distance(key: str, **kwargs) -> MoolinkSensorDescription:
         translation_key=key,
         device_class=SensorDeviceClass.DISTANCE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         unit_from_vehicle=True,
         **kwargs,
     )
@@ -62,6 +63,7 @@ SENSORS: tuple[MoolinkSensorDescription, ...] = (
         translation_key="odometer",
         device_class=SensorDeviceClass.DISTANCE,
         state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=0,
         unit_from_vehicle=True,
     ),
     _distance("total_driving_range"),
@@ -152,7 +154,7 @@ async def async_setup_entry(
         MoolinkSensor(coordinator, vehicle_id, description)
         for vehicle_id, vehicle in coordinator.data.items()
         for description in SENSORS
-        if getattr(vehicle, description.key, None) is not None
+        if reports(vehicle, description.key)
     )
 
 
