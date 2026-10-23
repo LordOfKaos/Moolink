@@ -75,7 +75,7 @@
         "data_description": {
           "scan_interval": "How often to read the state cached in the Bluelink cloud. This does not wake the car.",
           "force_refresh_interval": "How old cached data may get before the car is woken up for fresh data. Each wake-up uses some 12V battery. 0 disables it.",
-          "climate_temperature": "Used by the Climate switch. Use °F in the USA and °C elsewhere, including the UK.",
+          "climate_temperature": "Target temperature for the Climate control, also set from its card. Use °F in the USA and °C elsewhere, including the UK.",
           "quiet_start": "No automatic polling from this time, so the car is never woken overnight. Commands still work. Set start and end to the same time to turn quiet hours off.",
           "quiet_end": "Automatic polling resumes at this time."
         }
@@ -264,11 +264,13 @@
       }
     },
     "switch": {
-      "climate": {
-        "name": "Climate"
-      },
       "charging": {
         "name": "Charging"
+      }
+    },
+    "climate": {
+      "climate": {
+        "name": "Climate"
       }
     }
   },

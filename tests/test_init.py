@@ -40,7 +40,8 @@ async def test_setup_creates_entities(
     assert hass.states.get("binary_sensor.ioniq_5_plugged_in").state == "on"
     tracker = hass.states.get("device_tracker.ioniq_5_location")
     assert tracker.attributes["latitude"] == 40.0
-    assert hass.states.get("switch.ioniq_5_climate").state == "off"
+    assert hass.states.get("climate.ioniq_5_climate").state == "off"
+    assert hass.states.get("switch.ioniq_5_climate") is None
     assert hass.states.get("switch.ioniq_5_charging").state == "off"
     assert hass.states.get("number.ioniq_5_ac_charge_limit").state == "90"
     assert hass.states.get("button.ioniq_5_flash_hazard_lights") is not None
@@ -94,12 +95,12 @@ async def test_start_climate_service(
     assert options.duration == 10
 
 
-async def test_climate_switch_uses_defaults(
+async def test_climate_turn_on_uses_defaults(
     hass: HomeAssistant, mock_vm: MagicMock, config_entry
 ) -> None:
     await _setup(hass, config_entry)
     await hass.services.async_call(
-        "switch", "turn_on", {"entity_id": "switch.ioniq_5_climate"}, blocking=True
+        "climate", "turn_on", {"entity_id": "climate.ioniq_5_climate"}, blocking=True
     )
     _, options = mock_vm.start_climate.call_args.args
     assert options.set_temp == 70.0  # US default, °F

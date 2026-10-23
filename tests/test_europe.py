@@ -86,7 +86,7 @@ async def test_europe_climate_defaults_to_celsius(
     await hass.config_entries.async_setup(eu_entry.entry_id)
     await hass.async_block_till_done()
     await hass.services.async_call(
-        "switch", "turn_on", {"entity_id": "switch.ioniq_5_climate"}, blocking=True
+        "climate", "turn_on", {"entity_id": "climate.ioniq_5_climate"}, blocking=True
     )
     _, options = eu_vm.start_climate.call_args.args
     assert options.set_temp == 21.0

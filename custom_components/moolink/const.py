@@ -9,6 +9,7 @@ DOMAIN = "moolink"
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
+    Platform.CLIMATE,
     Platform.DEVICE_TRACKER,
     Platform.LOCK,
     Platform.NUMBER,
