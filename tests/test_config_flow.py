@@ -53,8 +53,12 @@ async def test_user_flow_invalid_auth(hass: HomeAssistant, mock_vm: MagicMock) -
 
 async def test_user_flow_otp(hass: HomeAssistant, mock_vm: MagicMock) -> None:
     mock_vm.otp_request = OTPRequest(
-        request_id="r", otp_key="k", has_email=True, has_sms=False,
-        email="d***@example.com", sms=None,
+        request_id="r",
+        otp_key="k",
+        has_email=True,
+        has_sms=False,
+        email="d***@example.com",
+        sms=None,
     )
     mock_vm.login.return_value = mock_vm.otp_request
     result = await _start(hass)

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect your Bluelink account",
-        "description": "Use the same login as the Bluelink app. In Europe, if a normal password is rejected, enter a refresh token instead (see the README).",
+        "description": "Use the same login as the Bluelink app. The region is where your account is registered (UK and Ireland: Europe).",
         "data": {
           "username": "Email",
           "password": "Password",
@@ -12,7 +12,7 @@
           "brand": "Brand"
         },
         "data_description": {
-          "pin": "The 4-digit Bluelink PIN. Needed for remote commands in most regions."
+          "pin": "Your 4-digit Bluelink PIN. Required in Europe, and needed for remote commands in most other regions."
         }
       },
       "otp_method": {
@@ -42,7 +42,8 @@
       "invalid_auth": "Invalid email, password, or region.",
       "cannot_connect": "Could not reach the Bluelink servers. Check the logs for details.",
       "invalid_otp": "That code was not accepted.",
-      "otp_send_failed": "Bluelink could not send the code."
+      "otp_send_failed": "Bluelink could not send the code.",
+      "pin_required": "Bluelink in Europe needs your PIN for remote commands."
     },
     "abort": {
       "already_configured": "This account is already configured.",
@@ -63,9 +64,12 @@
         "data_description": {
           "scan_interval": "How often to read the state cached in the Bluelink cloud. This does not wake the car.",
           "force_refresh_interval": "How old cached data may get before the car is woken up for fresh data. Each wake-up uses some 12V battery. 0 disables it.",
-          "climate_temperature": "Used by the Climate switch. Use °F in the USA and °C elsewhere."
+          "climate_temperature": "Used by the Climate switch. Use °F in the USA and °C elsewhere, including the UK."
         }
       }
+    },
+    "error": {
+      "invalid_temperature": "Your region's API doesn't accept that temperature. Europe: 14-31.5 °C in 0.5 steps. USA: 62-81 °F."
     }
   },
   "entity": {
@@ -263,7 +267,7 @@
         },
         "temperature": {
           "name": "Temperature",
-          "description": "Cabin temperature: °F in the USA, °C elsewhere. Defaults to the integration option."
+          "description": "Cabin temperature: °F in the USA, °C elsewhere (Europe: 14-31.5 in 0.5 steps). Defaults to the integration option."
         },
         "duration": {
           "name": "Duration",

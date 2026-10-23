@@ -1,2 +1,5 @@
-pytest-homeassistant-custom-component
+# Pinned so CI is reproducible; the scheduled compat job tests newer releases.
+pytest-homeassistant-custom-component==0.13.316
+pytest-cov
+ruff
 hyundai_kia_connect_api==4.39.0

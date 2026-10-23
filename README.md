@@ -30,7 +30,10 @@ your region's API supports.
 
 ## Installation
 
-### HACS (recommended)
+### HACS
+
+HACS can only install from **public** repositories. If this repo is private,
+use the manual install below, or make the repo public first.
 
 1. In HACS, open the menu and choose **Custom repositories**.
 2. Add `https://github.com/lordofkaos/moolink` with type **Integration**.
@@ -53,14 +56,30 @@ If Bluelink asks to verify a new device (Canada does this), you'll be asked
 where to send a one-time code and then to enter it. The session token is
 saved, so restarting Home Assistant doesn't trigger another code.
 
-### Region notes
+### UK and Europe
 
-- **USA:** set the climate temperature in °F. The default is 70.
-- **Canada, Europe, Australia, and others:** set the temperature in °C. The default is 21.
-- **Europe:** Hyundai's EU login now uses a captcha. If your normal password is
-  rejected, enter a Bluelink *refresh token* in the password field instead.
-  The `hyundai_kia_connect_api` project documents how to get one. Newer EU
-  accounts may need the **Europe (CCI/GSPA)** region.
+- **Region:** choose **Europe**. It's suggested automatically when Home
+  Assistant's country is set to the UK or another European country. It
+  covers both older cars and newer ones (for example the 2024+ IONIQ 5,
+  Kona and Santa Fe). If login or data fails, try **Europe (new Bluelink app
+  backend)**, which uses the same servers as the current Bluelink Europe app.
+- **Password:** your normal Bluelink password works.
+- **PIN:** required. The EU API checks it on every remote command. A wrong
+  PIN shows up as "PIN verification failed" when you send a command.
+- **Temperature:** in °C, from 14 to 31.5 in 0.5 steps. The default is 21.
+  Values outside that range are rejected before anything is sent to the car.
+- **Units:** distances use what the car reports, so UK cars show miles.
+  Tire pressures use the car's own display unit.
+- **Rate limits:** Hyundai Europe caps the number of API calls per day. The
+  defaults (30-minute polling, a wake-up every 4 hours) stay well within it.
+  Very short poll intervals or frequent force refreshes can lock you out
+  until the next day.
+
+### Other regions
+
+- **USA:** set the climate temperature in °F (62-81). The default is 70.
+- **Canada:** Bluelink may email or text a one-time code during setup.
+- **Everywhere else:** set the temperature in °C. The default is 21.
 
 ## Options
 
@@ -88,12 +107,12 @@ automation:
         weekday: [mon, tue, wed, thu, fri]
       - condition: numeric_state
         entity_id: sensor.ioniq_5_outside_temperature
-        below: 40
+        below: 5
     actions:
       - action: moolink.start_climate
         data:
           device_id: YOUR_DEVICE_ID
-          temperature: 72
+          temperature: 21
           defrost: true
           duration: 15
 ```
@@ -101,10 +120,26 @@ automation:
 ## Development
 
 ```bash
-python -m venv .venv && . .venv/bin/activate
+python3.13 -m venv .venv && . .venv/bin/activate
 pip install -r requirements_test.txt
-pytest
+pytest --cov          # tests + coverage (fails under 85%)
+ruff check . && ruff format --check .
 ```
+
+### Automated testing
+
+GitHub Actions run on every push:
+
+| Workflow | What it checks |
+| --- | --- |
+| `CI / lint` | `ruff` lint and formatting |
+| `CI / test` | Tests against a real Home Assistant test instance, with the Bluelink cloud mocked. Covers setup, every platform, commands, actions, the config/OTP/reauth/options flows, EU rules (PIN, °C range, UK region default), and a contract check that the library still has every field and region this integration uses |
+| `CI / hassfest` | Home Assistant's own manifest, services and translation validator |
+| `CI / hacs` | HACS repository validation |
+| `Bluelink library compatibility` | Weekly (and on demand): reruns the tests against the newest `hyundai_kia_connect_api`, so an upstream change that breaks this integration is caught before you bump the version |
+
+The tests never contact Hyundai, so they need no credentials and can't
+touch your car.
 
 ## Disclaimer
 

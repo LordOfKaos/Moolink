@@ -11,7 +11,11 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from hyundai_kia_connect_api import Token, Vehicle, VehicleManager
 from hyundai_kia_connect_api.const import ORDER_STATUS
@@ -74,6 +78,16 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         )
         # The library is synchronous and not thread-safe; serialize all calls.
         self._api_lock = asyncio.Lock()
+
+    def validate_temperature(self, value: float) -> None:
+        """Reject temperatures the region's API can't encode."""
+        allowed = getattr(self.vehicle_manager.api, "temperature_range", None)
+        if allowed and value not in allowed:
+            raise ServiceValidationError(
+                f"Temperature {value} is not supported here; use "
+                f"{allowed[0]}-{allowed[-1]} in steps of "
+                f"{allowed[1] - allowed[0]}"
+            )
 
     async def _async_run(self, func: Callable[..., Any], *args: Any) -> Any:
         """Run a blocking library call after making sure the token is valid."""
@@ -147,7 +161,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             self.config_entry.async_start_reauth(self.hass)
             raise HomeAssistantError(f"Bluelink authentication failed: {err}") from err
         except Exception as err:
-            raise HomeAssistantError(f"Bluelink command '{method}' failed: {err}") from err
+            raise HomeAssistantError(
+                f"Bluelink command '{method}' failed: {err}"
+            ) from err
 
         self.config_entry.async_create_background_task(
             self.hass,
@@ -175,7 +191,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         if status is None:
             await asyncio.sleep(COMMAND_REFRESH_DELAY)
         elif status in (ORDER_STATUS.FAILED, ORDER_STATUS.TIMEOUT):
-            _LOGGER.warning("Bluelink command %s finished with %s", method, status.value)
+            _LOGGER.warning(
+                "Bluelink command %s finished with %s", method, status.value
+            )
         else:
             _LOGGER.debug("Bluelink command %s finished with %s", method, status.value)
 

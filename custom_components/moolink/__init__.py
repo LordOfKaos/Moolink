@@ -78,14 +78,16 @@ def climate_options(
     """Build climate options from the entry's defaults plus any overrides."""
     overrides = overrides or {}
     opts = entry.options
-    return ClimateRequestOptions(
-        set_temp=overrides.get(
-            ATTR_TEMPERATURE,
-            opts.get(
-                CONF_CLIMATE_TEMPERATURE,
-                default_climate_temperature(entry.data[CONF_REGION]),
-            ),
+    set_temp = overrides.get(
+        ATTR_TEMPERATURE,
+        opts.get(
+            CONF_CLIMATE_TEMPERATURE,
+            default_climate_temperature(entry.data[CONF_REGION]),
         ),
+    )
+    entry.runtime_data.validate_temperature(set_temp)
+    return ClimateRequestOptions(
+        set_temp=set_temp,
         duration=overrides.get(
             ATTR_DURATION, opts.get(CONF_CLIMATE_DURATION, DEFAULT_CLIMATE_DURATION)
         ),

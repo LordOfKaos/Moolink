@@ -73,15 +73,14 @@ def mock_vm() -> Generator[MagicMock]:
     vm.api = MagicMock(spec=HyundaiBlueLinkApiUSA)
     # `supports()` inspects the class, so use the real implementation type.
     vm.api.__class__ = HyundaiBlueLinkApiUSA
+    vm.api.temperature_range = range(62, 82)
     vm.token = make_token()
     vm.vehicles = {VIN: make_vehicle()}
     vm.login.return_value = True
     vm.check_and_refresh_token.return_value = False
     vm.lock.return_value = "tx-1"
     vm.check_action_status.return_value = None
-    with patch(
-        "custom_components.moolink.coordinator.VehicleManager", return_value=vm
-    ):
+    with patch("custom_components.moolink.coordinator.VehicleManager", return_value=vm):
         yield vm
 
 

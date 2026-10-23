@@ -8,12 +8,14 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import (
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.selector import (
     BooleanSelector,
     NumberSelector,
@@ -50,8 +52,10 @@ from .const import (
     DEFAULT_FORCE_REFRESH_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    PIN_REQUIRED_REGIONS,
     REGIONS,
     default_climate_temperature,
+    default_region,
 )
 from .coordinator import MoolinkConfigEntry, build_vehicle_manager
 
@@ -79,7 +83,7 @@ USER_SCHEMA = vol.Schema(
         ),
         vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR,
         vol.Optional(CONF_PIN, default=""): PASSWORD_SELECTOR,
-        vol.Required(CONF_REGION, default="3"): _select(REGIONS),
+        vol.Required(CONF_REGION): _select(REGIONS),
         vol.Required(CONF_BRAND, default=str(BRAND_HYUNDAI)): _select(BRANDS),
     }
 )
@@ -126,14 +130,27 @@ class MoolinkConfigFlow(ConfigFlow, domain=DOMAIN):
                 f"{self._data[CONF_USERNAME].lower()}"
             )
             self._abort_if_unique_id_configured()
-            result, errors = await self._async_login()
-            if result is not None:
-                return result
+            if self._pin_missing():
+                errors[CONF_PIN] = "pin_required"
+            else:
+                result, errors = await self._async_login()
+                if result is not None:
+                    return result
 
         return self.async_show_form(
             step_id="user",
-            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA,
+                user_input
+                or {CONF_REGION: str(default_region(self.hass.config.country))},
+            ),
             errors=errors,
+        )
+
+    def _pin_missing(self) -> bool:
+        return (
+            self._data[CONF_REGION] in PIN_REQUIRED_REGIONS
+            and not self._data[CONF_PIN].strip()
         )
 
     async def _async_login(self) -> tuple[ConfigFlowResult | None, dict[str, str]]:
@@ -247,9 +264,12 @@ class MoolinkConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_PASSWORD: user_input[CONF_PASSWORD],
                 CONF_PIN: user_input.get(CONF_PIN, ""),
             }
-            result, errors = await self._async_login()
-            if result is not None:
-                return result
+            if self._pin_missing():
+                errors[CONF_PIN] = "pin_required"
+            else:
+                result, errors = await self._async_login()
+                if result is not None:
+                    return result
 
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -268,10 +288,19 @@ class MoolinkOptionsFlow(OptionsFlowWithReload):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            try:
+                if self.config_entry.state is ConfigEntryState.LOADED:
+                    self.config_entry.runtime_data.validate_temperature(
+                        user_input[CONF_CLIMATE_TEMPERATURE]
+                    )
+            except ServiceValidationError:
+                errors[CONF_CLIMATE_TEMPERATURE] = "invalid_temperature"
+            else:
+                return self.async_create_entry(data=user_input)
 
-        opts = self.config_entry.options
+        opts = {**self.config_entry.options, **(user_input or {})}
         schema = vol.Schema(
             {
                 vol.Required(
@@ -314,7 +343,7 @@ class MoolinkOptionsFlow(OptionsFlowWithReload):
                     ),
                 ): NumberSelector(
                     NumberSelectorConfig(
-                        min=16, max=90, step=0.5, mode=NumberSelectorMode.BOX
+                        min=14, max=90, step=0.5, mode=NumberSelectorMode.BOX
                     )
                 ),
                 vol.Required(
@@ -337,4 +366,4 @@ class MoolinkOptionsFlow(OptionsFlowWithReload):
                 ): BooleanSelector(),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

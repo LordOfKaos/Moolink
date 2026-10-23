@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from hyundai_kia_connect_api.exceptions import AuthenticationError
 
@@ -120,3 +122,48 @@ async def test_unload(hass: HomeAssistant, mock_vm: MagicMock, config_entry) -> 
     await _setup(hass, config_entry)
     assert await hass.config_entries.async_unload(config_entry.entry_id)
     assert config_entry.state is ConfigEntryState.NOT_LOADED
+
+
+async def test_update_failure_marks_unavailable(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    mock_vm.check_and_force_update_vehicles.side_effect = RuntimeError("boom")
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("lock.ioniq_5_doors").state == "unavailable"
+
+
+async def test_unsupported_command_raises(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    mock_vm.lock.side_effect = NotImplementedError
+    with pytest.raises(HomeAssistantError, match="not supported"):
+        await hass.services.async_call(
+            "lock", "lock", {"entity_id": "lock.ioniq_5_doors"}, blocking=True
+        )
+
+
+async def test_force_refresh_service(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    await hass.services.async_call(DOMAIN, "force_refresh", {}, blocking=True)
+    mock_vm.force_refresh_all_vehicles_states.assert_called_once()
+
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, VIN)})
+    await hass.services.async_call(
+        DOMAIN, "force_refresh", {"device_id": device.id}, blocking=True
+    )
+    mock_vm.force_refresh_vehicle_state.assert_called_once_with(VIN)
+
+
+async def test_service_rejects_unknown_device(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "start_climate", {"device_id": "nope"}, blocking=True
+        )
