@@ -1,0 +1,2 @@
+pytest-homeassistant-custom-component
+hyundai_kia_connect_api==4.39.0
