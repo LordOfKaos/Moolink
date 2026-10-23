@@ -80,7 +80,7 @@ jobs:
           TESTS: ${{ steps.tests.outcome }}
           UPGRADE: ${{ steps.upgrade.outputs.result }}
         run: |
-          ci="$(gh run list --workflow ci.yml --branch main --limit 1 --json conclusion,url --jq '.[0] | "\(.conclusion) — \(.url)"' || echo unknown)"
+          ci="$(gh run list --workflow ci.yml --branch main --limit 1 --json status,conclusion,url --jq '.[0] | "\(if .conclusion == "" then .status else .conclusion end) — \(.url)"' || echo unknown)"
           release="$(gh release view --json tagName,url --jq '"\(.tagName) — \(.url)"' 2>/dev/null || echo none)"
           prs="$(gh pr list --state open --json number,title --jq '.[] | "- #\(.number) \(.title)"')"
           if [[ "$TESTS" == "success" ]]; then tests="✅ pass"; else tests="❌ fail — see $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; fi
