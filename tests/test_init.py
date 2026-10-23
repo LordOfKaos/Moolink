@@ -200,3 +200,19 @@ async def test_distances_display_as_whole_numbers(
     await _setup(hass, config_entry)
     entry = er.async_get(hass).async_get("sensor.ioniq_5_ev_range")
     assert entry.options["sensor"]["suggested_display_precision"] == 0
+
+
+async def test_wrong_pin_explains_how_to_fix(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    mock_vm.start_hazard_lights.side_effect = Exception(
+        "PIN verification failed, ensure PIN is entered correctly."
+    )
+    with pytest.raises(HomeAssistantError, match="Reconfigure"):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.ioniq_5_flash_hazard_lights"},
+            blocking=True,
+        )

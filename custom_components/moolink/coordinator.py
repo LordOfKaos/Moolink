@@ -161,6 +161,11 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             self.config_entry.async_start_reauth(self.hass)
             raise HomeAssistantError(f"Bluelink authentication failed: {err}") from err
         except Exception as err:
+            if "PIN" in str(err):
+                raise HomeAssistantError(
+                    "Bluelink rejected your PIN. Update it under Settings → "
+                    "Devices & services → Moolink → ⋮ → Reconfigure."
+                ) from err
             raise HomeAssistantError(
                 f"Bluelink command '{method}' failed: {err}"
             ) from err

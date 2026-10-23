@@ -137,3 +137,32 @@ async def test_options_flow(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert config_entry.runtime_data.force_refresh_interval == 0
+
+
+async def test_reconfigure_updates_pin_keeps_password(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    config_entry.add_to_hass(hass)
+    result = await config_entry.start_reconfigure_flow(hass)
+    assert result["step_id"] == "reconfigure"
+    with patch("custom_components.moolink.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "", "pin": " 4321 "}
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert config_entry.data["pin"] == "4321"
+    assert config_entry.data["password"] == "hunter2"
+
+
+async def test_reconfigure_changes_password(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    config_entry.add_to_hass(hass)
+    result = await config_entry.start_reconfigure_flow(hass)
+    with patch("custom_components.moolink.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "new-pass", "pin": "1234"}
+        )
+    assert result["reason"] == "reconfigure_successful"
+    assert config_entry.data["password"] == "new-pass"

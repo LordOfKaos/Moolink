@@ -36,6 +36,14 @@
           "password": "Password",
           "pin": "PIN"
         }
+      },
+      "reconfigure": {
+        "title": "Update Bluelink login",
+        "description": "Update the PIN for {username}. It's the 4-digit PIN you use for remote commands in the Bluelink app. Leave the password blank to keep the current one.",
+        "data": {
+          "password": "Password",
+          "pin": "PIN"
+        }
       }
     },
     "error": {
@@ -47,7 +55,8 @@
     },
     "abort": {
       "already_configured": "This account is already configured.",
-      "reauth_successful": "Re-authentication was successful."
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Your Bluelink login was updated."
     }
   },
   "options": {

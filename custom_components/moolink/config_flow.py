@@ -87,6 +87,12 @@ USER_SCHEMA = vol.Schema(
         vol.Required(CONF_BRAND, default=str(BRAND_HYUNDAI)): _select(BRANDS),
     }
 )
+RECONFIGURE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_PASSWORD, default=""): PASSWORD_SELECTOR,
+        vol.Optional(CONF_PIN, default=""): PASSWORD_SELECTOR,
+    }
+)
 REAUTH_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR,
@@ -242,6 +248,10 @@ class MoolinkConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_update_reload_and_abort(
                 self._get_reauth_entry(), data=data
             )
+        if self.source == "reconfigure":
+            return self.async_update_reload_and_abort(
+                self._get_reconfigure_entry(), data=data
+            )
         return self.async_create_entry(
             title=f"{BRANDS[data[CONF_BRAND]]} {data[CONF_USERNAME]}", data=data
         )
@@ -276,6 +286,34 @@ class MoolinkConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=self.add_suggested_values_to_schema(
                 REAUTH_SCHEMA, {CONF_PIN: entry.data.get(CONF_PIN, "")}
             ),
+            description_placeholders={CONF_USERNAME: entry.data[CONF_USERNAME]},
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change the PIN and, optionally, the password."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._data = {
+                **{k: v for k, v in entry.data.items() if k != CONF_TOKEN},
+                # A blank password keeps the stored one.
+                CONF_PASSWORD: user_input.get(CONF_PASSWORD)
+                or entry.data[CONF_PASSWORD],
+                CONF_PIN: user_input.get(CONF_PIN, "").strip(),
+            }
+            if self._pin_missing():
+                errors[CONF_PIN] = "pin_required"
+            else:
+                result, errors = await self._async_login()
+                if result is not None:
+                    return result
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=RECONFIGURE_SCHEMA,
             description_placeholders={CONF_USERNAME: entry.data[CONF_USERNAME]},
             errors=errors,
         )
