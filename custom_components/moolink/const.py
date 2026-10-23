@@ -136,6 +136,9 @@ EU_DAILY_REQUEST_LIMIT = 200
 COMMAND_REFRESH_DELAY = 30  # seconds
 ACTION_STATUS_TIMEOUT = 60  # seconds
 
+# Fired when the car reports how a command ended.
+EVENT_COMMAND = f"{DOMAIN}_command"
+
 SERVICE_START_CLIMATE = "start_climate"
 SERVICE_FORCE_REFRESH = "force_refresh"
 SERVICE_SET_CHARGE_LIMITS = "set_charge_limits"

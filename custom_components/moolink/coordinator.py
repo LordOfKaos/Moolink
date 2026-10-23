@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import date, time, timedelta
 from typing import Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
@@ -44,6 +45,7 @@ from .const import (
     DEFAULT_QUIET_START,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    EVENT_COMMAND,
     REQUEST_RESERVE,
 )
 
@@ -276,12 +278,8 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         finally:
             self._pending.pop(vehicle_id, None)
 
-        if status in (ORDER_STATUS.FAILED, ORDER_STATUS.TIMEOUT):
-            _LOGGER.warning(
-                "Bluelink command %s finished with %s", method, status.value
-            )
-        elif status is not None:
-            _LOGGER.debug("Bluelink command %s finished with %s", method, status.value)
+        if status is not None:
+            self._report_result(vehicle_id, method, status)
 
         try:
             await self._async_run(
@@ -291,6 +289,46 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             _LOGGER.debug("Refresh after %s failed: %s", method, err)
             return
         self.async_set_updated_data(dict(self.vehicle_manager.vehicles))
+
+    def _report_result(
+        self, vehicle_id: str, method: str, status: ORDER_STATUS
+    ) -> None:
+        """Tell the user how a command ended: event always, notice on failure."""
+        vehicle = self.vehicle_manager.vehicles.get(vehicle_id)
+        car = (vehicle.name if vehicle else None) or vehicle_id
+        name = _command_name(method)
+        self.hass.bus.async_fire(
+            EVENT_COMMAND,
+            {
+                "vehicle_id": vehicle_id,
+                "vehicle": car,
+                "command": method,
+                "status": status.value.lower(),
+            },
+        )
+        notification_id = f"{DOMAIN}_{vehicle_id}_command"
+        if status is ORDER_STATUS.SUCCESS:
+            _LOGGER.debug("Bluelink command %s succeeded", method)
+            persistent_notification.async_dismiss(self.hass, notification_id)
+            return
+        if status is ORDER_STATUS.FAILED:
+            reason = "The car refused it, for example because a door was open."
+        elif status is ORDER_STATUS.TIMEOUT:
+            reason = (
+                "The car didn't respond. It may be out of mobile signal, or "
+                "asleep to protect its 12V battery."
+            )
+        else:
+            # Still pending when we stopped waiting; most often it went through.
+            _LOGGER.debug("Bluelink command %s still %s", method, status.value)
+            return
+        _LOGGER.warning("Bluelink command %s on %s: %s", method, car, status.value)
+        persistent_notification.async_create(
+            self.hass,
+            f"**{car}:** '{name}' didn't work. {reason}",
+            title="Moolink command failed",
+            notification_id=notification_id,
+        )
 
 
 def _parse_time(value: str) -> time:
