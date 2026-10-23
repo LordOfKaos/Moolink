@@ -1,0 +1,113 @@
+name: Weekly status
+
+# Every Monday: test against the newest hyundai_kia_connect_api, open an
+# upgrade pull request if it passes, and post a status report as a comment
+# on the "Weekly status report" issue (GitHub notifies you of it).
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+env:
+  LIB: hyundai_kia_connect_api
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements_test.txt
+
+      - name: Versions
+        id: versions
+        run: |
+          pinned="$(jq -r '.requirements[] | select(startswith(env.LIB + "==")) | split("==")[1]' custom_components/moolink/manifest.json)"
+          pip install --upgrade "$LIB"
+          latest="$(pip show "$LIB" | awk '/^Version:/ {print $2}')"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Test against the newest library
+        id: tests
+        continue-on-error: true
+        run: pytest -q 2>&1 | tee pytest.log
+
+      - name: Open an upgrade pull request
+        id: upgrade
+        if: >-
+          steps.tests.outcome == 'success' &&
+          steps.versions.outputs.latest != steps.versions.outputs.pinned
+        env:
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: |
+          branch="deps/$LIB-$LATEST"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "result=already proposed on \`$branch\`" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          version="$(python .github/scripts/bump_library.py "$LATEST")"
+          git commit -am "Upgrade $LIB to $LATEST" -m "Tests pass against $LATEST. Bumps Moolink to $version so merging publishes a release."
+          git push -u origin "$branch"
+          if url="$(gh pr create --base main --head "$branch" \
+              --title "Upgrade $LIB to $LATEST" \
+              --body "The weekly check found $LIB $LATEST and all tests pass against it. Merging bumps Moolink to $version and publishes a release.")"; then
+            # PRs opened with the workflow token don't trigger CI; start it.
+            gh workflow run ci.yml --ref "$branch"
+            echo "result=opened $url" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=pushed \`$branch\`, but GitHub Actions isn't allowed to open pull requests (see Settings → Actions → General)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post the status report
+        if: always()
+        env:
+          PINNED: ${{ steps.versions.outputs.pinned }}
+          LATEST: ${{ steps.versions.outputs.latest }}
+          TESTS: ${{ steps.tests.outcome }}
+          UPGRADE: ${{ steps.upgrade.outputs.result }}
+        run: |
+          ci="$(gh run list --workflow ci.yml --branch main --limit 1 --json conclusion,url --jq '.[0] | "\(.conclusion) — \(.url)"' || echo unknown)"
+          release="$(gh release view --json tagName,url --jq '"\(.tagName) — \(.url)"' 2>/dev/null || echo none)"
+          prs="$(gh pr list --state open --json number,title --jq '.[] | "- #\(.number) \(.title)"')"
+          if [[ "$TESTS" == "success" ]]; then tests="✅ pass"; else tests="❌ fail — see $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; fi
+          if [[ "$LATEST" == "$PINNED" ]]; then lib="$PINNED (up to date)"; else lib="$PINNED pinned, $LATEST available"; fi
+          {
+            echo "## Weekly status — $(date -u +%Y-%m-%d)"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Bluelink library | $lib |"
+            echo "| Tests against newest library | $tests |"
+            echo "| CI on main | $ci |"
+            echo "| Latest release | $release |"
+            [[ -n "$UPGRADE" ]] && echo "| Upgrade | $UPGRADE |"
+            echo
+            echo "**Open pull requests:**"
+            echo "${prs:-None}"
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          issue="$(gh issue list --state open --search 'in:title "Weekly status report"' --json number --jq '.[0].number')"
+          if [[ -z "$issue" ]]; then
+            gh issue create --title "Weekly status report" \
+              --body "Moolink posts a status report here every Monday. Subscribe to this issue to get them by email."
+            issue="$(gh issue list --state open --search 'in:title "Weekly status report"' --json number --jq '.[0].number')"
+          fi
+          gh issue comment "$issue" --body-file report.md
+
+      - name: Fail if tests failed against the newest library
+        if: steps.tests.outcome != 'success'
+        run: exit 1

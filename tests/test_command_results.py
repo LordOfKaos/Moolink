@@ -26,7 +26,7 @@ async def _lock(hass: HomeAssistant) -> None:
         await hass.services.async_call(
             "lock", "lock", {"entity_id": "lock.ioniq_5_doors"}, blocking=True
         )
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
 
 
 def _notices(hass: HomeAssistant) -> dict:
@@ -88,3 +88,31 @@ async def test_unknown_outcome_is_not_reported_as_failure(
     await _lock(hass)
     assert NOTIFICATION not in _notices(hass)
     assert events == []
+
+
+async def test_status_checked_sparingly_until_final(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    """Pending answers are re-checked, but only a few times."""
+    await _setup(hass, config_entry)
+    mock_vm.check_action_status.side_effect = [
+        ORDER_STATUS.PENDING,
+        ORDER_STATUS.PENDING,
+        ORDER_STATUS.SUCCESS,
+    ]
+    events = async_capture_events(hass, "moolink_command")
+    await _lock(hass)
+    assert mock_vm.check_action_status.call_count == 3
+    # Quick, non-blocking checks rather than the library's 5 s loop.
+    assert mock_vm.check_action_status.call_args.args[2] is False
+    assert events[-1].data["status"] == "success"
+
+
+async def test_still_pending_after_last_check_is_not_a_failure(
+    hass: HomeAssistant, mock_vm: MagicMock, config_entry
+) -> None:
+    await _setup(hass, config_entry)
+    mock_vm.check_action_status.return_value = ORDER_STATUS.PENDING
+    await _lock(hass)
+    assert mock_vm.check_action_status.call_count == 4
+    assert NOTIFICATION not in _notices(hass)

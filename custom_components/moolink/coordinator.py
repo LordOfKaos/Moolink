@@ -30,7 +30,8 @@ from hyundai_kia_connect_api.exceptions import (
 
 from .api_counter import ApiRequestCounter
 from .const import (
-    ACTION_STATUS_TIMEOUT,
+    ACTION_STATUS_CHECKS,
+    ACTION_STATUS_INTERVAL,
     COMMAND_REFRESH_DELAY,
     CONF_BRAND,
     CONF_FORCE_REFRESH_INTERVAL,
@@ -261,18 +262,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         status: ORDER_STATUS | None = None
         try:
             if action_id:
-                try:
-                    # Polls without holding the API lock so other calls aren't
-                    # blocked.
-                    status = await self.hass.async_add_executor_job(
-                        self.vehicle_manager.check_action_status,
-                        vehicle_id,
-                        action_id,
-                        True,
-                        ACTION_STATUS_TIMEOUT,
-                    )
-                except Exception:  # noqa: BLE001 - not every region supports this
-                    _LOGGER.debug("Action status unavailable for %s", method)
+                status = await self._async_wait_for_result(
+                    vehicle_id, method, action_id
+                )
             if status is None:
                 await asyncio.sleep(COMMAND_REFRESH_DELAY)
         finally:
@@ -289,6 +281,34 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             _LOGGER.debug("Refresh after %s failed: %s", method, err)
             return
         self.async_set_updated_data(dict(self.vehicle_manager.vehicles))
+
+    async def _async_wait_for_result(
+        self, vehicle_id: str, method: str, action_id: str
+    ) -> ORDER_STATUS | None:
+        """Ask Bluelink a few times whether the car has carried out a command.
+
+        Returns None when the region can't tell us, and PENDING when the car
+        still hadn't answered after the last check.
+        """
+        status: ORDER_STATUS | None = None
+        for _ in range(ACTION_STATUS_CHECKS):
+            await asyncio.sleep(ACTION_STATUS_INTERVAL)
+            try:
+                # Without the API lock, so polls and other commands aren't held up.
+                status = await self.hass.async_add_executor_job(
+                    self.vehicle_manager.check_action_status,
+                    vehicle_id,
+                    action_id,
+                    False,
+                )
+            except Exception:  # noqa: BLE001 - not every region supports this
+                _LOGGER.debug("Action status unavailable for %s", method)
+                return None
+            if status is None or status is ORDER_STATUS.UNKNOWN:
+                return None
+            if status is not ORDER_STATUS.PENDING:
+                return status
+        return status
 
     def _report_result(
         self, vehicle_id: str, method: str, status: ORDER_STATUS

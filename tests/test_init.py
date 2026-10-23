@@ -58,7 +58,7 @@ async def test_lock_command_and_follow_up(
             "lock", "unlock", {"entity_id": "lock.ioniq_5_doors"}, blocking=True
         )
         mock_vm.vehicles[VIN].is_locked = False
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
     mock_vm.unlock.assert_called_once_with(VIN)
     mock_vm.update_vehicle_with_cached_state.assert_called_with(VIN)
     assert hass.states.get("lock.ioniq_5_doors").state == "unlocked"
@@ -241,9 +241,9 @@ async def test_next_command_allowed_once_car_has_acted(
     press = {"entity_id": "button.ioniq_5_flash_hazard_lights"}
     with patch("custom_components.moolink.coordinator.COMMAND_REFRESH_DELAY", 0):
         await hass.services.async_call("button", "press", press, blocking=True)
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
         await hass.services.async_call("button", "press", press, blocking=True)
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
     assert mock_vm.start_hazard_lights.call_count == 2
 
 

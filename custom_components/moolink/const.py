@@ -135,7 +135,10 @@ EU_DAILY_REQUEST_LIMIT = 200
 
 # Delay before re-reading state after a remote command was sent.
 COMMAND_REFRESH_DELAY = 30  # seconds
-ACTION_STATUS_TIMEOUT = 60  # seconds
+# How often and how long to ask Bluelink whether the car carried out a
+# command. The library's own wait asks every 5 s; this spends fewer requests.
+ACTION_STATUS_INTERVAL = 15  # seconds
+ACTION_STATUS_CHECKS = 4
 
 # Fired when the car reports how a command ended.
 EVENT_COMMAND = f"{DOMAIN}_command"

@@ -37,6 +37,13 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     return
 
 
+@pytest.fixture(autouse=True)
+def fast_status_checks() -> Generator[None]:
+    """Don't wait 15 s between command status checks in tests."""
+    with patch("custom_components.moolink.coordinator.ACTION_STATUS_INTERVAL", 0):
+        yield
+
+
 def make_token() -> Token:
     return Token(
         username=ENTRY_DATA[CONF_USERNAME],

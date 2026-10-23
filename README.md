@@ -15,10 +15,11 @@ your region's API supports.
 | --- | --- |
 | Device tracker | GPS location |
 | Lock | Door lock / unlock |
-| Switch | Climate (remote start with your default settings), EV charging start/stop |
+| Climate | Climate control: off or on, with a target temperature in your region's range. Works with thermostat cards and voice assistants |
+| Switch | EV charging start/stop |
 | Number | AC and DC charge limits (EVs) |
 | Button | Flash hazard lights, hazard lights + horn, open/close charge port, force refresh |
-| Sensor | Odometer, range (total / fuel / EV), fuel level, EV battery %, battery health, 12V battery %, charging power, time to full, outside and set temperature, tire pressures, next service, trouble codes, last updated |
+| Sensor | API requests today (on a "Bluelink account" device), odometer, range (total / fuel / EV), fuel level, EV battery %, battery health, 12V battery %, charging power, time to full, outside and set temperature, tire pressures, next service, trouble codes, last updated |
 | Binary sensor | Engine running, each door / window / trunk / hood / sunroof, charging, plugged in, charge port, defrost and heaters, low fuel, tire pressure and fluid / key fob / 12V warnings |
 
 ### Actions
@@ -75,16 +76,40 @@ saved, so restarting Home Assistant doesn't trigger another code.
   cars, and Home Assistant also converts them to its own unit system. To
   see miles, open each distance sensor's settings and set **Unit of
   measurement** to `mi`. Tire pressures use the car's own display unit.
-- **Rate limits:** Hyundai Europe caps the number of API calls per day. The
-  defaults (30-minute polling, a wake-up every 4 hours) stay well within it.
-  Very short poll intervals or frequent force refreshes can lock you out
-  until the next day.
+- **Rate limits:** see [API limits](#api-limits).
 
 ### Other regions
 
 - **USA:** set the climate temperature in °F (62-81). The default is 70.
 - **Canada:** Bluelink may email or text a one-time code during setup.
 - **Everywhere else:** set the temperature in °C. The default is 21.
+
+## API limits
+
+Hyundai doesn't publish its limits. Owners and the community projects
+built on Bluelink report **about 200 requests per day per account in
+Europe**, after which every request is refused with error 5091 ("Exceeds
+number of requests") until midnight. Other regions have no well-known
+daily limit.
+
+What uses requests:
+
+| Action | Requests (Europe) |
+| --- | --- |
+| One normal poll (status, parked location, driving/energy info) | 3 |
+| Default polling: every 30 min, paused 22:00-07:00 | about 90 a day |
+| A forced refresh (wakes the car) | several |
+| A command (lock, climate, ...): send, up to 4 status checks 15 s apart, then a refresh | 5 to 8 |
+
+How Moolink stays inside it:
+
+- The **API requests today** sensor counts every request to the Bluelink
+  cloud. Its attributes show the known limit and whether polling is paused.
+- **Quiet hours** (22:00-07:00 by default) stop automatic polling overnight.
+- Within 30 requests of the limit, automatic polling stops so the rest stay
+  available for your commands.
+- If Bluelink reports the limit anyway, polling pauses until midnight and
+  the last known state stays on screen.
 
 ## Options
 
@@ -94,10 +119,37 @@ Open **Configure** on the integration to change these:
 | --- | --- | --- |
 | Poll interval | 30 min | Reads the state cached in the Bluelink cloud. This does not wake the car. |
 | Force refresh interval | 240 min | Once cached data is older than this, the car is woken for fresh data. Each wake-up drains a little 12V battery. `0` disables it. |
-| Climate temperature / duration / defrost | region default / 10 min / off | Used by the Climate switch. |
+| Quiet hours start / end | 22:00 / 07:00 | No automatic polling in this window, so the car is never woken overnight. Commands still work. Set both to the same time to turn it off. |
+| Climate temperature / duration / defrost | region default / 10 min / off | Used by the Climate control, which also changes the temperature. |
 
-After each command, the integration waits for the car to confirm and then
-refreshes its state.
+## When a command fails
+
+After each command, Moolink waits for the car to confirm and then
+refreshes its state. If the car reports the command **failed** (for
+example a door was open) or **timed out** (no signal, or asleep), a
+notification appears in Home Assistant. A later successful command
+clears it.
+
+Every finished command also fires a `moolink_command` event with
+`vehicle`, `command` and `status` (`success`, `failed` or `timeout`). To
+get failures on your phone:
+
+```yaml
+automation:
+  - alias: Tell me when the car ignores a command
+    triggers:
+      - trigger: event
+        event_type: moolink_command
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.event.data.status != 'success' }}"
+    actions:
+      - action: notify.mobile_app_your_phone
+        data:
+          message: >-
+            {{ trigger.event.data.vehicle }}: {{ trigger.event.data.command }}
+            {{ trigger.event.data.status }}
+```
 
 ## Example automation
 
@@ -138,11 +190,14 @@ GitHub Actions run on every push:
 | Workflow | What it checks |
 | --- | --- |
 | `CI / lint` | `ruff` lint and formatting |
-| `CI / test` | Tests against a real Home Assistant test instance, with the Bluelink cloud mocked. Covers setup, every platform, commands, actions, the config/OTP/reauth/options flows, EU rules (PIN, °C range, UK region default), and a contract check that the library still has every field and region this integration uses |
+| `CI / test` | Tests against a real Home Assistant test instance, with the Bluelink cloud mocked. Covers setup, every platform, commands, actions, the config/OTP/reauth/options flows, EU rules (PIN, °C range, UK region default), quiet hours, the request counter, command results, diagnostics redaction, snapshots of every entity, and a contract check that the library still has every field and region this integration uses |
 | `CI / hassfest` | Home Assistant's own manifest, services and translation validator |
 | `CI / hacs` | HACS repository validation |
 | `Release` | After CI passes on `main`, publishes a GitHub release for a new `manifest.json` version, with notes listing every commit since the last release |
-| `Bluelink library compatibility` | Weekly (and on demand): reruns the tests against the newest `hyundai_kia_connect_api`, so an upstream change that breaks this integration is caught before you bump the version |
+| `Weekly status` | Every Monday (and on demand): tests against the newest `hyundai_kia_connect_api`, opens an upgrade pull request when it passes, and posts a status report (library, tests, CI on `main`, latest release, open pull requests) as a comment on the **Weekly status report** issue |
+
+Snapshots live in `tests/snapshots/`. After an intended change to an
+entity, refresh them with `pytest --snapshot-update` and review the diff.
 
 ### Releasing
 
