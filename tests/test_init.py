@@ -213,7 +213,7 @@ async def test_wrong_pin_explains_how_to_fix(
     mock_vm.start_hazard_lights.side_effect = Exception(
         "PIN verification failed, ensure PIN is entered correctly."
     )
-    with pytest.raises(HomeAssistantError, match="Reconfigure"):
+    with pytest.raises(HomeAssistantError, match="Repairs"):
         await hass.services.async_call(
             "button",
             "press",

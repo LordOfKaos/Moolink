@@ -17,6 +17,7 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 from hyundai_kia_connect_api import Token, Vehicle, VehicleManager
@@ -243,11 +244,13 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         if self.data is not None and (reason := self.polling_paused_reason):
             # Keep showing the last state; commands still work.
             _LOGGER.debug("Skipping Bluelink poll: %s", reason)
+            self._sync_issues()
             return self.data
         try:
             await self._async_run(self._update_all)
         except RateLimitingError as err:
             self.rate_limited_on = dt_util.now().date()
+            self._sync_issues()
             _LOGGER.warning(
                 "Bluelink's daily request limit is used up; polling paused until "
                 "midnight (%s requests counted today)",
@@ -264,6 +267,7 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         except Exception as err:  # the library leaks requests/JSON errors
             raise UpdateFailed(f"Unexpected Bluelink error: {err}") from err
         self._adjust_interval()
+        self._sync_issues()
         return dict(self.vehicle_manager.vehicles)
 
     async def async_force_refresh(self, vehicle_id: str | None = None) -> None:
@@ -301,10 +305,17 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             self._pending.pop(vehicle_id, None)
             if isinstance(err, AuthenticationError):
                 self.config_entry.async_start_reauth(self.hass)
+            if isinstance(err, RateLimitingError):
+                self.rate_limited_on = dt_util.now().date()
+                self._sync_issues()
+            if _is_pin_error(err):
+                self._raise_pin_issue()
             raise _command_error(method, err) from err
         except BaseException:
             self._pending.pop(vehicle_id, None)
             raise
+        # Bluelink accepted the command, so the PIN is right.
+        ir.async_delete_issue(self.hass, DOMAIN, self._issue_id("pin_rejected"))
 
         self.config_entry.async_create_background_task(
             self.hass,
@@ -367,6 +378,58 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
                 return status
         return status
 
+    def _issue_id(self, kind: str, vehicle_id: str | None = None) -> str:
+        suffix = vehicle_id or self.config_entry.entry_id
+        return f"{kind}_{suffix}"
+
+    def _raise_pin_issue(self) -> None:
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._issue_id("pin_rejected"),
+            is_fixable=True,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="pin_rejected",
+            translation_placeholders={"account": self.config_entry.data[CONF_USERNAME]},
+            data={"entry_id": self.config_entry.entry_id},
+        )
+
+    def _sync_issues(self) -> None:
+        """Raise or clear the low 12V and daily limit repair issues."""
+        for vehicle_id, vehicle in self.vehicle_manager.vehicles.items():
+            issue_id = self._issue_id("low_12v_battery", vehicle_id)
+            if self.low_12v_battery(vehicle):
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    issue_id,
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="low_12v_battery",
+                    translation_placeholders={
+                        "vehicle": vehicle.name or vehicle_id,
+                        "level": str(vehicle.car_battery_percentage),
+                        "threshold": str(self.min_12v_battery),
+                    },
+                )
+            else:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+        issue_id = self._issue_id("daily_limit_reached")
+        if self.rate_limited:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="daily_limit_reached",
+                translation_placeholders={
+                    "account": self.config_entry.data[CONF_USERNAME]
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+
     def _report_result(
         self, vehicle_id: str, method: str, status: ORDER_STATUS
     ) -> None:
@@ -415,6 +478,10 @@ def _parse_time(value: str) -> time:
     return parsed
 
 
+def _is_pin_error(err: Exception) -> bool:
+    return "PIN" in str(err)
+
+
 def _command_name(method: str) -> str:
     return COMMAND_NAMES.get(method, method.replace("_", " "))
 
@@ -436,9 +503,8 @@ def _command_error(method: str, err: Exception) -> HomeAssistantError:
             f"Bluelink is still processing a previous command, so '{name}' "
             "was not sent. Wait a minute, then try again."
         )
-    if "PIN" in str(err):
+    if _is_pin_error(err):
         return HomeAssistantError(
-            "Bluelink rejected your PIN. Update it under Settings → "
-            "Devices & services → Moolink → ⋮ → Reconfigure."
+            "Bluelink rejected your PIN. Fix it under Settings → Repairs."
         )
     return HomeAssistantError(f"Bluelink command '{name}' failed: {err}")

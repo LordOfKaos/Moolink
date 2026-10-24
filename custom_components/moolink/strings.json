@@ -372,5 +372,32 @@
         }
       }
     }
+  },
+  "issues": {
+    "pin_rejected": {
+      "title": "Bluelink rejected the PIN",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Enter your Bluelink PIN",
+            "description": "Bluelink rejected the PIN saved for {account}, so remote commands won't work. Enter the 4-digit PIN you use for remote commands in the Bluelink app.",
+            "data": {
+              "pin": "PIN"
+            }
+          }
+        },
+        "abort": {
+          "entry_removed": "This Bluelink account is no longer set up."
+        }
+      }
+    },
+    "low_12v_battery": {
+      "title": "{vehicle}'s 12V battery is low",
+      "description": "The 12V battery is at {level}%, below the {threshold}% you set, so Moolink has stopped waking the car automatically. Data still updates whenever the car reports in, and commands still work. Driving or charging the car recharges the 12V battery. This clears itself once the level recovers."
+    },
+    "daily_limit_reached": {
+      "title": "Bluelink daily request limit reached",
+      "description": "Hyundai refused further requests today for {account}. Moolink has paused polling until midnight and keeps showing the last known state. Commands will also be refused until then. Consider a longer poll interval or quiet hours in the integration options."
+    }
   }
 }
