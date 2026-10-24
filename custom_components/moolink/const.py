@@ -51,6 +51,9 @@ REGION_EUROPE = 1
 REGION_CANADA = 2
 REGION_USA = 3
 REGION_EUROPE_CCI = 9
+# Cabin temperatures (°C) European cars accept. The newer EU backend's API
+# doesn't declare a range, so both EU regions use this one.
+EU_TEMPERATURE_RANGE = tuple(x * 0.5 for x in range(28, 64))  # 14.0-31.5
 # EU accounts need the Bluelink PIN for every remote command.
 PIN_REQUIRED_REGIONS = {REGION_EUROPE, REGION_EUROPE_CCI}
 

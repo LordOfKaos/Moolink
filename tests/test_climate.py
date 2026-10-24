@@ -217,3 +217,31 @@ async def test_options_reject_target_above_new_maximum(
     await hass.async_block_till_done()
     assert eu_entry.runtime_data.climate_max == 25
     assert hass.states.get(CLIMATE).attributes["max_temp"] == 25.0
+
+
+async def test_new_eu_backend_uses_european_range(
+    hass: HomeAssistant, mock_vm: MagicMock
+) -> None:
+    """The newer EU backend's API declares no range; Europe's still applies."""
+    from hyundai_kia_connect_api.HyundaiCciApiEU import HyundaiCciApiEU
+
+    mock_vm.api.__class__ = HyundaiCciApiEU
+    mock_vm.api.temperature_range = None
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="9_2_driver",
+        data={**ENTRY_DATA, "region": 9, CONF_TOKEN: make_token().to_dict()},
+        options={**NO_QUIET_HOURS, "climate_max_temperature": 25},
+    )
+    await _setup(hass, entry)
+    state = hass.states.get(CLIMATE)
+    assert state.attributes["min_temp"] == 14.0
+    assert state.attributes["max_temp"] == 25.0
+    assert state.attributes["target_temp_step"] == 0.5
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {"entity_id": CLIMATE, "temperature": 21.3},
+            blocking=True,
+        )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date, time, timedelta
 from typing import Any
 
@@ -52,7 +52,9 @@ from .const import (
     DEFAULT_QUIET_START,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    EU_TEMPERATURE_RANGE,
     EVENT_COMMAND,
+    PIN_REQUIRED_REGIONS,
     REQUEST_RESERVE,
 )
 
@@ -140,9 +142,17 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
                 f"Temperature {value} is above your car's maximum of {self.climate_max}"
             )
 
+    @property
+    def temperature_range(self) -> Sequence[float] | None:
+        """Temperatures the region accepts, if known."""
+        allowed = getattr(self.vehicle_manager.api, "temperature_range", None)
+        if not allowed and self.config_entry.data[CONF_REGION] in PIN_REQUIRED_REGIONS:
+            return EU_TEMPERATURE_RANGE
+        return allowed
+
     def validate_temperature_range(self, value: float) -> None:
         """Reject temperatures the region's API can't encode."""
-        allowed = getattr(self.vehicle_manager.api, "temperature_range", None)
+        allowed = self.temperature_range
         if allowed and value not in allowed:
             raise ServiceValidationError(
                 f"Temperature {value} is not supported here; use "

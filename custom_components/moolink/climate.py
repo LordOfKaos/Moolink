@@ -66,7 +66,7 @@ class MoolinkClimate(MoolinkEntity, ClimateEntity):
             if region == REGION_USA
             else UnitOfTemperature.CELSIUS
         )
-        allowed = getattr(coordinator.vehicle_manager.api, "temperature_range", None)
+        allowed = coordinator.temperature_range
         if allowed and len(allowed) > 1:
             self._attr_min_temp = float(allowed[0])
             self._attr_max_temp = float(allowed[-1])
