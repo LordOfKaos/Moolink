@@ -1,0 +1,74 @@
+blueprint:
+  name: Moolink - pre-heat or cool the car
+  description: >-
+    Start the car's climate at a set time on the days you choose. Each start
+    sends one command to the car.
+  domain: automation
+  author: Moolink
+  source_url: https://github.com/LordOfKaos/Moolink/blob/main/blueprints/automation/moolink/preheat.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    car_climate:
+      name: Car climate
+      selector:
+        entity:
+          domain: climate
+          integration: moolink
+    start_time:
+      name: Start at
+      default: "07:30:00"
+      selector:
+        time:
+    days:
+      name: Days
+      default: [mon, tue, wed, thu, fri]
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Monday
+              value: mon
+            - label: Tuesday
+              value: tue
+            - label: Wednesday
+              value: wed
+            - label: Thursday
+              value: thu
+            - label: Friday
+              value: fri
+            - label: Saturday
+              value: sat
+            - label: Sunday
+              value: sun
+    temperature:
+      name: Temperature
+      description: Must be within what your car accepts (for example 14-25 °C).
+      default: 21
+      selector:
+        number:
+          min: 14
+          max: 31.5
+          step: 0.5
+          mode: box
+
+mode: single
+
+variables:
+  temperature: !input temperature
+
+triggers:
+  - trigger: time
+    at: !input start_time
+
+conditions:
+  - condition: time
+    weekday: !input days
+
+actions:
+  - action: climate.set_temperature
+    target:
+      entity_id: !input car_climate
+    data:
+      temperature: "{{ temperature }}"
+      hvac_mode: heat_cool

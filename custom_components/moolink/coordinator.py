@@ -187,6 +187,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         updated = vehicle.last_updated_at
         if updated is None or self.low_12v_battery(vehicle):
             return False
+        if updated.tzinfo is None:
+            # The library passes times without a zone through unchanged.
+            updated = updated.replace(tzinfo=dt_util.get_default_time_zone())
         age_minutes = (dt_util.utcnow() - updated).total_seconds() / 60
         if 0 < self.force_refresh_interval <= age_minutes:
             return True

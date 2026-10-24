@@ -151,3 +151,18 @@ async def test_manual_force_refresh_still_allowed_on_low_12v(
         "button", "press", {"entity_id": "button.ioniq_5_force_refresh"}, blocking=True
     )
     mock_vm.force_refresh_vehicle_state.assert_called_once_with(VIN)
+
+
+async def test_timestamp_without_timezone_does_not_break_polling(
+    hass: HomeAssistant, mock_vm: MagicMock, freezer: FrozenDateTimeFactory
+) -> None:
+    entry = _entry()
+    await _poll_once(
+        hass, mock_vm, freezer, entry, charging=True, data_age=timedelta(minutes=5)
+    )
+    naive_old = (dt_util.as_local(NOW) - timedelta(hours=2)).replace(tzinfo=None)
+    mock_vm.vehicles[VIN]._last_updated_at = naive_old
+    mock_vm.force_refresh_vehicle_state.reset_mock()
+    await entry.runtime_data.async_refresh()
+    assert entry.runtime_data.last_update_success
+    mock_vm.force_refresh_vehicle_state.assert_called_once_with(VIN)

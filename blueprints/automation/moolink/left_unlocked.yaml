@@ -1,0 +1,62 @@
+blueprint:
+  name: Moolink - car left unlocked
+  description: >-
+    When the car has been unlocked for a while, run your actions (for example
+    a phone notification) and, if you choose, lock it again.
+  domain: automation
+  author: Moolink
+  source_url: https://github.com/LordOfKaos/Moolink/blob/main/blueprints/automation/moolink/left_unlocked.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    car_lock:
+      name: Car doors
+      selector:
+        entity:
+          domain: lock
+          integration: moolink
+    unlocked_for:
+      name: Unlocked for
+      description: How long the car must stay unlocked before acting.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 240
+          unit_of_measurement: min
+          mode: box
+    lock_again:
+      name: Lock it again
+      description: Send a lock command to the car.
+      default: false
+      selector:
+        boolean:
+    actions:
+      name: Also do
+      description: For example, send a notification to your phone.
+      default: []
+      selector:
+        action:
+
+mode: single
+
+variables:
+  lock_again: !input lock_again
+
+triggers:
+  - trigger: state
+    entity_id: !input car_lock
+    to: unlocked
+    for:
+      minutes: !input unlocked_for
+
+actions:
+  - if:
+      - condition: template
+        value_template: "{{ lock_again }}"
+    then:
+      - action: lock.lock
+        target:
+          entity_id: !input car_lock
+  - choose: []
+    default: !input actions

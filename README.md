@@ -19,7 +19,7 @@ your region's API supports.
 | Switch | EV charging start/stop |
 | Number | AC and DC charge limits (EVs) |
 | Button | Flash hazard lights, hazard lights + horn, open/close charge port, force refresh |
-| Sensor | API requests today (on a "Bluelink account" device), odometer, range (total / fuel / EV), fuel level, EV battery %, battery health, 12V battery %, charging power, time to full, outside and set temperature, tire pressures, next service, trouble codes, last updated |
+| Sensor | Energy used today (with a driving / climate / electronics / battery care breakdown), lifetime energy used and regenerated, 30-day average consumption (European EVs), API requests today (on a "Bluelink account" device), odometer, range (total / fuel / EV), fuel level, EV battery %, battery health, 12V battery %, charging power, time to full, outside and set temperature, tire pressures, next service, trouble codes, last updated |
 | Binary sensor | Engine running, each door / window / trunk / hood / sunroof, charging, plugged in, charge port, defrost and heaters, low fuel, tire pressure and fluid / key fob / 12V warnings |
 
 ### Actions
@@ -96,8 +96,9 @@ What uses requests:
 
 | Action | Requests (Europe) |
 | --- | --- |
-| One normal poll (status, parked location, driving/energy info) | 3 |
-| Default polling: every 30 min, paused 22:00-07:00 | about 90 a day |
+| One normal poll (status, parked location, two energy-history requests) | 4 |
+| Default polling: every 30 min, paused 22:00-07:00 | about 120 a day |
+| Polling every 60 min, paused 22:00-07:00 | about 60 a day |
 | A forced refresh (wakes the car) | several |
 | A command (lock, climate, ...): send, up to 4 status checks 15 s apart, then a refresh | 5 to 8 |
 
@@ -119,9 +120,34 @@ Open **Configure** on the integration to change these:
 | --- | --- | --- |
 | Poll interval | 30 min | Reads the state cached in the Bluelink cloud. This does not wake the car. |
 | Force refresh interval | 240 min | Once cached data is older than this, the car is woken for fresh data. Each wake-up drains a little 12V battery. `0` disables it. |
+| Refresh while charging | 30 min | While plugged in and charging, wake the car for fresh data this often (a charging car is awake anyway). `0` turns it off. |
+| Lowest 12V battery for automatic wake-ups | 50% | Below this, the car is never woken automatically. A manual Force refresh still works. |
 | Quiet hours start / end | 22:00 / 07:00 | No automatic polling in this window, so the car is never woken overnight. Commands still work. Set both to the same time to turn it off. |
 | Climate temperature / duration / defrost | region default / 10 min / off | Used by the Climate control, which also changes the temperature. |
 | Car's maximum temperature | empty | The highest temperature your car's climate accepts, if lower than the region allows (some Konas stop at 25 °C). Caps the Climate control and the `start_climate` action. |
+
+## Repairs
+
+Problems that need you appear under **Settings → Repairs** and clear
+themselves once resolved:
+
+- **Bluelink rejected the PIN**: fix it right there by entering the PIN.
+- **12V battery is low**: automatic wake-ups are paused until it recovers.
+- **Daily request limit reached**: polling is paused until midnight.
+
+## Blueprints
+
+Ready-made automations you fill in from a form. Click to import:
+
+| Blueprint | Import |
+| --- | --- |
+| Car left unlocked: notify, and optionally lock it | [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FLordOfKaos%2FMoolink%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fmoolink%2Fleft_unlocked.yaml) |
+| Charging finished, or battery above a level | [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FLordOfKaos%2FMoolink%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fmoolink%2Fcharging_finished.yaml) |
+| Door, window, trunk or sunroof open at night | [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FLordOfKaos%2FMoolink%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fmoolink%2Fopen_at_night.yaml) |
+| Pre-heat or cool at a set time on chosen days | [Import](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FLordOfKaos%2FMoolink%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fmoolink%2Fpreheat.yaml) |
+
+Then **Settings → Automations & scenes → Blueprints**, pick one, and fill
+in the form.
 
 ## When a command fails
 
@@ -191,7 +217,7 @@ GitHub Actions run on every push:
 | Workflow | What it checks |
 | --- | --- |
 | `CI / lint` | `ruff` lint and formatting |
-| `CI / test` | Tests against a real Home Assistant test instance, with the Bluelink cloud mocked. Covers setup, every platform, commands, actions, the config/OTP/reauth/options flows, EU rules (PIN, °C range, UK region default), quiet hours, the request counter, command results, diagnostics redaction, snapshots of every entity, and a contract check that the library still has every field and region this integration uses |
+| `CI / test` | Tests against a real Home Assistant test instance, with the Bluelink cloud mocked. Covers setup, every platform, commands, actions, the config/OTP/reauth/options flows, EU rules (PIN, °C range, UK region default), quiet hours, the request counter, command results, diagnostics redaction, repairs, energy sensors, wake-up rules, Home Assistant's own validation of every blueprint, snapshots of every entity, and a contract check that the library still has every field and region this integration uses |
 | `CI / hassfest` | Home Assistant's own manifest, services and translation validator |
 | `CI / hacs` | HACS repository validation |
 | `Release` | After CI passes on `main`, publishes a GitHub release for a new `manifest.json` version, with notes listing every commit since the last release |

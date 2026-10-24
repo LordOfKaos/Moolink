@@ -1,0 +1,65 @@
+blueprint:
+  name: Moolink - door or window open at night
+  description: >-
+    Run your actions if any of the car's doors, windows, trunk or sunroof is
+    open during the night: when the night starts, or when one opens later.
+    The variable "open_names" lists what is open.
+  domain: automation
+  author: Moolink
+  source_url: https://github.com/LordOfKaos/Moolink/blob/main/blueprints/automation/moolink/open_at_night.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    openings:
+      name: Doors and windows
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class:
+            - door
+            - window
+          integration: moolink
+          multiple: true
+    night_start:
+      name: Night starts
+      default: "22:00:00"
+      selector:
+        time:
+    night_end:
+      name: Night ends
+      default: "06:00:00"
+      selector:
+        time:
+    actions:
+      name: Do
+      description: For example, send a notification to your phone.
+      selector:
+        action:
+
+mode: single
+
+variables:
+  openings: !input openings
+  open_names: >-
+    {{ expand(openings) | selectattr('state', 'eq', 'on')
+       | map(attribute='name') | join(', ') }}
+
+triggers:
+  - trigger: time
+    at: !input night_start
+  - trigger: state
+    entity_id: !input openings
+    to: "on"
+
+conditions:
+  - condition: time
+    after: !input night_start
+    before: !input night_end
+  - condition: state
+    entity_id: !input openings
+    match: any
+    state: "on"
+
+actions:
+  - choose: []
+    default: !input actions
