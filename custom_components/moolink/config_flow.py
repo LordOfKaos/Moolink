@@ -38,11 +38,13 @@ from .const import (
     BRAND_HYUNDAI,
     BRANDS,
     CONF_BRAND,
+    CONF_CHARGING_REFRESH_INTERVAL,
     CONF_CLIMATE_DEFROST,
     CONF_CLIMATE_DURATION,
     CONF_CLIMATE_MAX_TEMPERATURE,
     CONF_CLIMATE_TEMPERATURE,
     CONF_FORCE_REFRESH_INTERVAL,
+    CONF_MIN_12V_BATTERY,
     CONF_OTP_CODE,
     CONF_OTP_METHOD,
     CONF_PIN,
@@ -51,9 +53,11 @@ from .const import (
     CONF_REGION,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
+    DEFAULT_CHARGING_REFRESH_INTERVAL,
     DEFAULT_CLIMATE_DEFROST,
     DEFAULT_CLIMATE_DURATION,
     DEFAULT_FORCE_REFRESH_INTERVAL,
+    DEFAULT_MIN_12V_BATTERY,
     DEFAULT_QUIET_END,
     DEFAULT_QUIET_START,
     DEFAULT_SCAN_INTERVAL,
@@ -378,6 +382,37 @@ class MoolinkOptionsFlow(OptionsFlowWithReload):
                             min=0,
                             max=1440,
                             unit_of_measurement="min",
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Coerce(int),
+                ),
+                vol.Required(
+                    CONF_CHARGING_REFRESH_INTERVAL,
+                    default=opts.get(
+                        CONF_CHARGING_REFRESH_INTERVAL,
+                        DEFAULT_CHARGING_REFRESH_INTERVAL,
+                    ),
+                ): vol.All(
+                    NumberSelector(
+                        NumberSelectorConfig(
+                            min=0,
+                            max=1440,
+                            unit_of_measurement="min",
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Coerce(int),
+                ),
+                vol.Required(
+                    CONF_MIN_12V_BATTERY,
+                    default=opts.get(CONF_MIN_12V_BATTERY, DEFAULT_MIN_12V_BATTERY),
+                ): vol.All(
+                    NumberSelector(
+                        NumberSelectorConfig(
+                            min=0,
+                            max=100,
+                            unit_of_measurement="%",
                             mode=NumberSelectorMode.BOX,
                         )
                     ),

@@ -21,7 +21,13 @@ from custom_components.moolink.const import (
 )
 
 VIN = "KM8TESTVIN0000001"
-NO_QUIET_HOURS = {"quiet_start": "00:00:00", "quiet_end": "00:00:00"}
+# Tests poll the cache only, at any time of day, unless they say otherwise.
+NO_QUIET_HOURS = {
+    "quiet_start": "00:00:00",
+    "quiet_end": "00:00:00",
+    "force_refresh_interval": 0,
+    "charging_refresh_interval": 0,
+}
 ENTRY_DATA = {
     CONF_USERNAME: "driver@example.com",
     CONF_PASSWORD: "hunter2",

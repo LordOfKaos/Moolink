@@ -31,6 +31,8 @@ CONF_CLIMATE_DURATION = "climate_duration"
 CONF_CLIMATE_DEFROST = "climate_defrost"
 # Highest temperature the car itself accepts, if lower than the region's.
 CONF_CLIMATE_MAX_TEMPERATURE = "climate_max_temperature"
+CONF_CHARGING_REFRESH_INTERVAL = "charging_refresh_interval"
+CONF_MIN_12V_BATTERY = "min_12v_battery"
 CONF_QUIET_START = "quiet_start"
 CONF_QUIET_END = "quiet_end"
 
@@ -122,6 +124,12 @@ def default_climate_temperature(region: int) -> float:
     """Default cabin temperature in the unit the region's API expects."""
     return 70.0 if region == REGION_USA else 21.0
 
+
+# While plugged in and charging, wake the car for fresh data this often
+# (minutes; 0 = never). A charging car is awake anyway.
+DEFAULT_CHARGING_REFRESH_INTERVAL = 30
+# Never wake the car automatically below this 12V battery level (%).
+DEFAULT_MIN_12V_BATTERY = 50
 
 # Overnight window with no automatic polling (no requests, car never woken).
 # Setting start and end to the same time turns it off.

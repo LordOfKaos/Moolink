@@ -26,6 +26,7 @@ def _at(freezer: FrozenDateTimeFactory, hour: int, minute: int = 0) -> None:
 
 
 def _entry(region: int = 3, **options) -> MockConfigEntry:
+    options = {"force_refresh_interval": 0, "charging_refresh_interval": 0, **options}
     return MockConfigEntry(
         domain=DOMAIN,
         unique_id=f"{region}_2_driver",
@@ -55,11 +56,11 @@ async def test_default_quiet_hours_overnight(
     entry = _entry()
     _at(freezer, 12)
     await _setup(hass, entry)
-    calls = mock_vm.check_and_force_update_vehicles.call_count
+    calls = mock_vm.update_vehicle_with_cached_state.call_count
 
     _at(freezer, hour)
     await entry.runtime_data.async_refresh()
-    polled = mock_vm.check_and_force_update_vehicles.call_count > calls
+    polled = mock_vm.update_vehicle_with_cached_state.call_count > calls
     assert polled is polls
     paused = hass.states.get(SENSOR).attributes["polling_paused"]
     assert (paused == "quiet hours") is not polls
@@ -80,13 +81,13 @@ async def test_custom_daytime_quiet_hours(
     entry = _entry(quiet_start="09:00:00", quiet_end="17:00:00")
     _at(freezer, 8)
     await _setup(hass, entry)
-    calls = mock_vm.check_and_force_update_vehicles.call_count
+    calls = mock_vm.update_vehicle_with_cached_state.call_count
     _at(freezer, 12)
     await entry.runtime_data.async_refresh()
-    assert mock_vm.check_and_force_update_vehicles.call_count == calls
+    assert mock_vm.update_vehicle_with_cached_state.call_count == calls
     _at(freezer, 23)
     await entry.runtime_data.async_refresh()
-    assert mock_vm.check_and_force_update_vehicles.call_count == calls + 1
+    assert mock_vm.update_vehicle_with_cached_state.call_count == calls + 1
 
 
 async def test_reserve_kept_for_commands_in_europe(
@@ -101,9 +102,9 @@ async def test_reserve_kept_for_commands_in_europe(
     for _ in range(170):
         session.hooks["response"][0](requests.Response())
 
-    calls = mock_vm.check_and_force_update_vehicles.call_count
+    calls = mock_vm.update_vehicle_with_cached_state.call_count
     await entry.runtime_data.async_refresh()
-    assert mock_vm.check_and_force_update_vehicles.call_count == calls
+    assert mock_vm.update_vehicle_with_cached_state.call_count == calls
     assert (
         hass.states.get(SENSOR).attributes["polling_paused"]
         == "saving remaining requests for commands"

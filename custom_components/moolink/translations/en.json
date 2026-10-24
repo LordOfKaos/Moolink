@@ -71,7 +71,9 @@
           "climate_defrost": "Defrost when starting climate",
           "quiet_start": "Quiet hours start",
           "quiet_end": "Quiet hours end",
-          "climate_max_temperature": "Car's maximum temperature"
+          "climate_max_temperature": "Car's maximum temperature",
+          "charging_refresh_interval": "Refresh while charging",
+          "min_12v_battery": "Lowest 12V battery for automatic wake-ups"
         },
         "data_description": {
           "scan_interval": "How often to read the state cached in the Bluelink cloud. This does not wake the car.",
@@ -79,7 +81,9 @@
           "climate_temperature": "Target temperature for the Climate control, also set from its card. Use °F in the USA and °C elsewhere, including the UK.",
           "quiet_start": "No automatic polling from this time, so the car is never woken overnight. Commands still work. Set start and end to the same time to turn quiet hours off.",
           "quiet_end": "Automatic polling resumes at this time.",
-          "climate_max_temperature": "The highest temperature your car's climate accepts, if it's lower than your region allows (for example 25 °C). Leave empty to allow the region's full range."
+          "climate_max_temperature": "The highest temperature your car's climate accepts, if it's lower than your region allows (for example 25 °C). Leave empty to allow the region's full range.",
+          "charging_refresh_interval": "While the car is plugged in and charging, wake it this often to follow charging progress. A charging car is awake anyway. 0 turns it off. Quiet hours still apply.",
+          "min_12v_battery": "The car is never woken automatically (force refresh or charging refresh) when its 12V battery is below this level."
         }
       }
     },

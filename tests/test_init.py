@@ -134,7 +134,7 @@ async def test_update_failure_marks_unavailable(
     hass: HomeAssistant, mock_vm: MagicMock, config_entry
 ) -> None:
     await _setup(hass, config_entry)
-    mock_vm.check_and_force_update_vehicles.side_effect = RuntimeError("boom")
+    mock_vm.update_vehicle_with_cached_state.side_effect = RuntimeError("boom")
     await config_entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get("lock.ioniq_5_doors").state == "unavailable"

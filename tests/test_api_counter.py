@@ -97,16 +97,16 @@ async def test_limit_pauses_polling_and_keeps_data(
 ) -> None:
     await _setup(hass, config_entry)
     coordinator = config_entry.runtime_data
-    mock_vm.check_and_force_update_vehicles.side_effect = RateLimitingError("5091")
+    mock_vm.update_vehicle_with_cached_state.side_effect = RateLimitingError("5091")
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     # Last known state stays visible instead of going unavailable.
     assert hass.states.get("lock.ioniq_5_doors").state == "locked"
     assert hass.states.get(SENSOR).attributes["limit_reached"] is True
 
-    calls = mock_vm.check_and_force_update_vehicles.call_count
+    calls = mock_vm.update_vehicle_with_cached_state.call_count
     await coordinator.async_refresh()
-    assert mock_vm.check_and_force_update_vehicles.call_count == calls
+    assert mock_vm.update_vehicle_with_cached_state.call_count == calls
 
 
 async def test_limit_on_command_explained(

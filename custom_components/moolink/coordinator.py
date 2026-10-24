@@ -34,15 +34,19 @@ from .const import (
     ACTION_STATUS_INTERVAL,
     COMMAND_REFRESH_DELAY,
     CONF_BRAND,
+    CONF_CHARGING_REFRESH_INTERVAL,
     CONF_CLIMATE_MAX_TEMPERATURE,
     CONF_FORCE_REFRESH_INTERVAL,
+    CONF_MIN_12V_BATTERY,
     CONF_PIN,
     CONF_QUIET_END,
     CONF_QUIET_START,
     CONF_REGION,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
+    DEFAULT_CHARGING_REFRESH_INTERVAL,
     DEFAULT_FORCE_REFRESH_INTERVAL,
+    DEFAULT_MIN_12V_BATTERY,
     DEFAULT_QUIET_END,
     DEFAULT_QUIET_START,
     DEFAULT_SCAN_INTERVAL,
@@ -109,8 +113,17 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
         self.quiet_end = _parse_time(
             entry.options.get(CONF_QUIET_END, DEFAULT_QUIET_END)
         )
+        self.scan_interval = timedelta(
+            minutes=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        )
         self.force_refresh_interval: int = entry.options.get(
             CONF_FORCE_REFRESH_INTERVAL, DEFAULT_FORCE_REFRESH_INTERVAL
+        )
+        self.charging_refresh_interval: int = entry.options.get(
+            CONF_CHARGING_REFRESH_INTERVAL, DEFAULT_CHARGING_REFRESH_INTERVAL
+        )
+        self.min_12v_battery: int = entry.options.get(
+            CONF_MIN_12V_BATTERY, DEFAULT_MIN_12V_BATTERY
         )
         # The library is synchronous and not thread-safe; serialize all calls.
         self._api_lock = asyncio.Lock()
@@ -158,12 +171,45 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
                 data={**self.config_entry.data, CONF_TOKEN: token_dict},
             )
 
+    def low_12v_battery(self, vehicle: Vehicle) -> bool:
+        """Whether the car's 12V battery is too low to wake it automatically."""
+        level = vehicle.car_battery_percentage
+        return level is not None and level < self.min_12v_battery
+
+    def _wake_due(self, vehicle: Vehicle) -> bool:
+        """Whether this poll should wake the car instead of reading the cache.
+
+        Decided from the previous poll's data: wake when the car's data is
+        older than the force refresh interval, or, while it is charging,
+        older than the charging refresh interval. Never below the 12V limit.
+        """
+        updated = vehicle.last_updated_at
+        if updated is None or self.low_12v_battery(vehicle):
+            return False
+        age_minutes = (dt_util.utcnow() - updated).total_seconds() / 60
+        if 0 < self.force_refresh_interval <= age_minutes:
+            return True
+        return bool(
+            vehicle.ev_battery_is_charging
+            and 0 < self.charging_refresh_interval <= age_minutes
+        )
+
     def _update_all(self) -> None:
         vm = self.vehicle_manager
-        if self.force_refresh_interval > 0:
-            vm.check_and_force_update_vehicles(self.force_refresh_interval * 60)
-        else:
-            vm.update_all_vehicles_with_cached_state()
+        for vehicle_id, vehicle in vm.vehicles.items():
+            if self._wake_due(vehicle):
+                vm.force_refresh_vehicle_state(vehicle_id)
+            else:
+                vm.update_vehicle_with_cached_state(vehicle_id)
+
+    def _adjust_interval(self) -> None:
+        """Poll as often as the charging refresh while any car is charging."""
+        interval = self.scan_interval
+        if self.charging_refresh_interval > 0 and any(
+            v.ev_battery_is_charging for v in self.vehicle_manager.vehicles.values()
+        ):
+            interval = min(interval, timedelta(minutes=self.charging_refresh_interval))
+        self.update_interval = interval
 
     @property
     def rate_limited(self) -> bool:
@@ -217,6 +263,7 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             raise UpdateFailed(f"Error communicating with Bluelink: {err}") from err
         except Exception as err:  # the library leaks requests/JSON errors
             raise UpdateFailed(f"Unexpected Bluelink error: {err}") from err
+        self._adjust_interval()
         return dict(self.vehicle_manager.vehicles)
 
     async def async_force_refresh(self, vehicle_id: str | None = None) -> None:
