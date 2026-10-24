@@ -24,7 +24,12 @@ from custom_components.moolink.sensor import SENSORS
 
 COMPONENT = Path(__file__).parent.parent / "custom_components" / "moolink"
 VEHICLE_FIELDS_USED = [
-    *(d.key for d in SENSORS),
+    *(d.key for d in SENSORS if d.value_fn is None),
+    # Read by the computed energy sensors.
+    "daily_stats",
+    "total_power_consumed",
+    "total_power_regenerated",
+    "power_consumption_30d",
     *(d.key for d in BINARY_SENSORS),
     *LIMIT_KEYS,
     "is_locked",
@@ -106,3 +111,21 @@ def test_brand_icon(name: str, size: int) -> None:
     width = int.from_bytes(data[16:20], "big")
     height = int.from_bytes(data[20:24], "big")
     assert (width, height) == (size, size)
+
+
+def test_daily_stats_have_energy_fields() -> None:
+    from hyundai_kia_connect_api.Vehicle import DailyDrivingStats
+
+    stats = DailyDrivingStats()
+    for field in (
+        "date",
+        "total_consumed",
+        "engine_consumption",
+        "climate_consumption",
+        "onboard_electronics_consumption",
+        "battery_care_consumption",
+        "regenerated_energy",
+        "distance",
+        "distance_unit",
+    ):
+        assert hasattr(stats, field), field

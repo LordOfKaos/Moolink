@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
@@ -16,12 +17,16 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
+    UnitOfEnergy,
+    UnitOfEnergyDistance,
     UnitOfPower,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
+from hyundai_kia_connect_api import Vehicle
 
 from .coordinator import MoolinkConfigEntry, MoolinkCoordinator
 from .entity import MoolinkEntity, account_device_info, reports, vehicle_unit
@@ -36,6 +41,61 @@ class MoolinkSensorDescription(SensorEntityDescription):
     """
 
     unit_from_vehicle: bool = False
+    # For values computed from the vehicle rather than read from `key`.
+    value_fn: Callable[[Vehicle], Any] | None = None
+    unit_fn: Callable[[Vehicle], str | None] | None = None
+    attrs_fn: Callable[[Vehicle], dict[str, Any]] | None = None
+
+
+def _kwh(wh: float | None) -> float | None:
+    return None if wh is None else round(wh / 1000, 2)
+
+
+def _today_stats(vehicle: Vehicle) -> Any:
+    """The car's daily energy record for today, if it has one."""
+    today = dt_util.now().date()
+    for day in vehicle.daily_stats or []:
+        if day.date is not None and day.date.date() == today:
+            return day
+    return None
+
+
+def _energy_today(vehicle: Vehicle) -> float | None:
+    if not vehicle.daily_stats:
+        return None
+    day = _today_stats(vehicle)
+    return _kwh(day.total_consumed) if day else 0.0
+
+
+def _energy_today_breakdown(vehicle: Vehicle) -> dict[str, Any]:
+    day = _today_stats(vehicle)
+    if day is None:
+        return {}
+    return {
+        "driving_kwh": _kwh(day.engine_consumption),
+        "climate_kwh": _kwh(day.climate_consumption),
+        "electronics_kwh": _kwh(day.onboard_electronics_consumption),
+        "battery_care_kwh": _kwh(day.battery_care_consumption),
+        "regenerated_kwh": _kwh(day.regenerated_energy),
+        "distance": day.distance,
+        "distance_unit": day.distance_unit,
+    }
+
+
+def _consumption_30d(vehicle: Vehicle) -> float | None:
+    """Average consumption; Wh/km, or mi/kWh for cars reporting miles."""
+    value = vehicle.power_consumption_30d
+    if not value:
+        return None
+    if vehicle.odometer_unit == "mi":
+        return round(1000 / value, 2)
+    return value
+
+
+def _consumption_unit(vehicle: Vehicle) -> str:
+    if vehicle.odometer_unit == "mi":
+        return UnitOfEnergyDistance.MILES_PER_KILO_WATT_HOUR
+    return UnitOfEnergyDistance.WATT_HOUR_PER_KM
 
 
 def _distance(key: str, **kwargs) -> MoolinkSensorDescription:
@@ -132,6 +192,43 @@ SENSORS: tuple[MoolinkSensorDescription, ...] = (
     _tire("tire_pressure_rear_left"),
     _tire("tire_pressure_rear_right"),
     MoolinkSensorDescription(
+        key="energy_used_today",
+        translation_key="energy_used_today",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value_fn=_energy_today,
+        attrs_fn=_energy_today_breakdown,
+    ),
+    MoolinkSensorDescription(
+        key="total_power_consumed",
+        translation_key="energy_consumed_total",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=0,
+        value_fn=lambda v: _kwh(v.total_power_consumed),
+    ),
+    MoolinkSensorDescription(
+        key="total_power_regenerated",
+        translation_key="energy_regenerated_total",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=0,
+        value_fn=lambda v: _kwh(v.total_power_regenerated),
+    ),
+    MoolinkSensorDescription(
+        key="power_consumption_30d",
+        translation_key="consumption_30d",
+        device_class=SensorDeviceClass.ENERGY_DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=_consumption_30d,
+        unit_fn=_consumption_unit,
+    ),
+    MoolinkSensorDescription(
         key="dtc_count",
         translation_key="dtc_count",
         state_class=SensorStateClass.MEASUREMENT,
@@ -157,7 +254,11 @@ async def async_setup_entry(
         MoolinkSensor(coordinator, vehicle_id, description)
         for vehicle_id, vehicle in coordinator.data.items()
         for description in SENSORS
-        if reports(vehicle, description.key)
+        if (
+            description.value_fn(vehicle) is not None
+            if description.value_fn
+            else reports(vehicle, description.key)
+        )
     ]
     entities.append(MoolinkApiRequestsSensor(coordinator))
     async_add_entities(entities)
@@ -181,6 +282,8 @@ class MoolinkSensor(MoolinkEntity, SensorEntity):
     @property
     def native_value(self) -> float | int | str | datetime | None:
         """Return the value from the vehicle."""
+        if self.entity_description.value_fn:
+            return self.entity_description.value_fn(self.vehicle)
         value = getattr(self.vehicle, self.entity_description.key, None)
         if isinstance(value, datetime) and value.tzinfo is None:
             return None  # HA requires timezone-aware timestamps
@@ -189,9 +292,18 @@ class MoolinkSensor(MoolinkEntity, SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the fixed unit or the unit reported by the car."""
+        if self.entity_description.unit_fn:
+            return self.entity_description.unit_fn(self.vehicle)
         if self.entity_description.unit_from_vehicle:
             return vehicle_unit(self.vehicle, self.entity_description.key)
         return self.entity_description.native_unit_of_measurement
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra detail, such as today's energy breakdown."""
+        if self.entity_description.attrs_fn:
+            return self.entity_description.attrs_fn(self.vehicle)
+        return None
 
 
 class MoolinkApiRequestsSensor(CoordinatorEntity[MoolinkCoordinator], RestoreSensor):
