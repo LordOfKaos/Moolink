@@ -2,4 +2,4 @@
 pytest-homeassistant-custom-component==0.13.316
 pytest-cov
 ruff
-hyundai_kia_connect_api==4.39.0
+hyundai_kia_connect_api==4.41.2
