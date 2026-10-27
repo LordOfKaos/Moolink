@@ -135,6 +135,17 @@ themselves once resolved:
 - **12V battery is low**: automatic wake-ups are paused until it recovers.
 - **Daily request limit reached**: polling is paused until midnight.
 
+## Troubleshooting
+
+- **Asked to sign in again after Hyundai outages (before 0.3.2):** the
+  Bluelink library reports Hyundai's own server errors (HTTP 5xx,
+  "External service error", firewall blocks) as login failures. Moolink now
+  recognises these as temporary: it retries on the next poll and commands
+  say the servers are having problems, without asking for your password.
+- **`Unknown tire PressureUnit 3` in the log:** some cars report tyre
+  pressure in a unit the library doesn't know yet, so pressures are skipped.
+  Tyre *warnings* still work. It's harmless.
+
 ## Blueprints
 
 Ready-made automations you fill in from a form. Click to import:

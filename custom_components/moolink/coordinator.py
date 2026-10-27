@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable, Sequence
 from datetime import date, time, timedelta
 from typing import Any
@@ -73,6 +74,20 @@ COMMAND_NAMES = {
 }
 
 type MoolinkConfigEntry = ConfigEntry[MoolinkCoordinator]
+
+# The library raises AuthenticationError for any failed login step, including
+# Hyundai's own server errors and firewall blocks. These are temporary and
+# say nothing about the password, so they must not trigger re-authentication.
+_SERVER_SIDE_AUTH_FAILURE = re.compile(
+    r"HTTP 5\d\d\b|External service error|server-side block", re.IGNORECASE
+)
+
+
+def is_server_side_auth_failure(err: Exception) -> bool:
+    """Whether an authentication error is really Hyundai's servers failing."""
+    return isinstance(err, AuthenticationError) and bool(
+        _SERVER_SIDE_AUTH_FAILURE.search(str(err))
+    )
 
 
 def build_vehicle_manager(data: dict[str, Any]) -> VehicleManager:
@@ -273,6 +288,11 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
                 return self.data
             raise UpdateFailed("Bluelink's daily request limit is used up") from err
         except AuthenticationError as err:
+            if is_server_side_auth_failure(err):
+                # Retried on the next poll; the stored login is still fine.
+                raise UpdateFailed(
+                    f"Bluelink's login servers are having problems: {err}"
+                ) from err
             # Includes AuthenticationOTPRequired; both need user interaction.
             raise ConfigEntryAuthFailed(str(err)) from err
         except HyundaiKiaException as err:
@@ -295,8 +315,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             self.rate_limited_on = dt_util.now().date()
             raise _command_error("force_refresh_vehicle_state", err) from err
         except AuthenticationError as err:
-            self.config_entry.async_start_reauth(self.hass)
-            raise HomeAssistantError(f"Bluelink authentication failed: {err}") from err
+            if not is_server_side_auth_failure(err):
+                self.config_entry.async_start_reauth(self.hass)
+            raise _command_error("force_refresh_vehicle_state", err) from err
         except Exception as err:
             raise HomeAssistantError(f"Force refresh failed: {err}") from err
         self.async_set_updated_data(dict(vm.vehicles))
@@ -316,7 +337,9 @@ class MoolinkCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
             action_id = await self._async_run(func, vehicle_id, *args)
         except Exception as err:
             self._pending.pop(vehicle_id, None)
-            if isinstance(err, AuthenticationError):
+            if isinstance(err, AuthenticationError) and not is_server_side_auth_failure(
+                err
+            ):
                 self.config_entry.async_start_reauth(self.hass)
             if isinstance(err, RateLimitingError):
                 self.rate_limited_on = dt_util.now().date()
@@ -502,6 +525,11 @@ def _command_name(method: str) -> str:
 def _command_error(method: str, err: Exception) -> HomeAssistantError:
     """Turn a library error from a command into a message for the user."""
     name = _command_name(method)
+    if is_server_side_auth_failure(err):
+        return HomeAssistantError(
+            f"Hyundai's Bluelink servers are having problems, so '{name}' was "
+            "not sent. Try again in a few minutes."
+        )
     if isinstance(err, AuthenticationError):
         return HomeAssistantError(f"Bluelink authentication failed: {err}")
     if isinstance(err, NotImplementedError):

@@ -48,7 +48,7 @@
     },
     "error": {
       "invalid_auth": "Invalid email, password, or region.",
-      "cannot_connect": "Could not reach the Bluelink servers. Check the logs for details.",
+      "cannot_connect": "Couldn't reach the Bluelink servers, or they're having problems. Try again in a few minutes; the logs have details.",
       "invalid_otp": "That code was not accepted.",
       "otp_send_failed": "Bluelink could not send the code.",
       "pin_required": "Bluelink in Europe needs your PIN for remote commands."

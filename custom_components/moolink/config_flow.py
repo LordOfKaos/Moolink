@@ -67,7 +67,11 @@ from .const import (
     default_climate_temperature,
     default_region,
 )
-from .coordinator import MoolinkConfigEntry, build_vehicle_manager
+from .coordinator import (
+    MoolinkConfigEntry,
+    build_vehicle_manager,
+    is_server_side_auth_failure,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -176,7 +180,10 @@ class MoolinkConfigFlow(ConfigFlow, domain=DOMAIN):
                 build_vehicle_manager, self._data
             )
             logged_in = await self.hass.async_add_executor_job(self._vm.login)
-        except AuthenticationError:
+        except AuthenticationError as err:
+            if is_server_side_auth_failure(err):
+                _LOGGER.warning("Bluelink login servers failed: %s", err)
+                return None, {"base": "cannot_connect"}
             return None, {"base": "invalid_auth"}
         except Exception:
             _LOGGER.exception("Unexpected error logging in to Bluelink")
