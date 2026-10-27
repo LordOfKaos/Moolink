@@ -142,9 +142,11 @@ themselves once resolved:
   "External service error", firewall blocks) as login failures. Moolink now
   recognises these as temporary: it retries on the next poll and commands
   say the servers are having problems, without asking for your password.
-- **`Unknown tire PressureUnit 3` in the log:** some cars report tyre
-  pressure in a unit the library doesn't know yet, so pressures are skipped.
-  Tyre *warnings* still work. It's harmless.
+- **`Unknown tire PressureUnit 3` in the log:** the car has indirect tyre
+  pressure monitoring (no sensors in the wheels), so there are no per-tyre
+  pressures to show; the tyre pressure *warning* still works. On the newer
+  EU backend the library logs this expected case as a warning on every
+  poll. It's harmless.
 
 ## Blueprints
 
