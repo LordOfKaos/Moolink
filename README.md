@@ -142,10 +142,12 @@ themselves once resolved:
   "External service error", firewall blocks) as login failures. Moolink now
   recognises these as temporary: it retries on the next poll and commands
   say the servers are having problems, without asking for your password.
-- **`Unknown tire PressureUnit 3` in the log:** the car reports its tyre
-  pressure unit as code 3, which the library doesn't map to a unit, so it
-  skips the per-tyre pressures. The tyre pressure *warning* still works.
-  Being investigated with the library's maintainers.
+- **`Unknown tire PressureUnit 3` in the log:** the car sends unit code 3
+  with a pressure of 0 for every tyre, meaning it shares no per-tyre
+  readings through Bluelink (seen on a Kona Electric, which only shows a
+  low-pressure warning in the car too). The tyre pressure *warning* still
+  works in Moolink. The library logs this expected case as a warning on
+  every poll; it's harmless.
 
 ## Blueprints
 
